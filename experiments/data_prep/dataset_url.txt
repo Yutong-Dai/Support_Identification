@@ -1,0 +1,10 @@
+https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/a9a
+https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.tr.bz2
+https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/covtype.libsvm.binary.bz2
+https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/kdda.bz2
+https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/news20.binary.bz2
+https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/phishing
+https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/rcv1_train.binary.bz2
+https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/real-sim.bz2
+https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/url_combined_normalized.bz2
+https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/w8a
