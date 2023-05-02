@@ -7,7 +7,7 @@ sys.path.append("../../")
 import src.utils as utils
 import copy
 from scipy.sparse import csr_matrix
-
+from src.funcs.regularizer import NatOG, GL1
 
 class StoBaseSolver:
     def __init__(self, f, r, config):
@@ -26,6 +26,13 @@ class StoBaseSolver:
         if self.config.print_level > 0:
             self.print_problem()
             self.print_config()
+        # solver mode
+        if isinstance(r, NatOG):
+            self.solve_mode = 'inexact'
+        elif isinstance(r, GL1):
+            self.solve_mode = 'exact'
+        else:
+            raise ValueError("Unknown regularizer type.")
         # reproted stats
         self.status = 404
         self.num_epochs = 0
@@ -63,6 +70,12 @@ class StoBaseSolver:
         contents += f" accuracy: {self.config.accuracy} | optim scaled: {self.config.optim_scaled} | time limits:{self.config.max_time} | epoch limits:{self.config.max_iters}\n"
         contents += f"Sampling Setups: batchsize: {self.config.batchsize} | shuffle: {self.config.shuffle}\n"
         contents += f"Proximal Stepsize update: {self.stepsize_strategy}\n"
+        if self.solve_mode == 'inexact':
+            contents += f"Inexact Proximal Solver:\n exact solve:{config.exact_pg_computation} | ipg_strategy:{config.ipg_strategy} | ipg_do_linesearch:{config.ipg_do_linesearch}\n"
+            if config.ipg_strategy == 'diminishing':
+                contents += f" ipg_diminishing_c:{config.ipg_diminishing_c} | ipg_diminishing_delta:{config.ipg_diminishing_delta}\n"
+            if config.ipg_do_linesearch:
+                contents += f" ipg_linesearch_eta:{config.ipg_linesearch_eta} | ipg_linesearch_xi:{config.ipg_linesearch_xi} | ipg_linesearch_beta:{config.ipg_linesearch_beta}\n"
         contents += "*" * 100 + "\n"
         if self.filename is not None:
             with open(self.filename, "a") as logfile:

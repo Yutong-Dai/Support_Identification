@@ -10,14 +10,16 @@ def get_config():
     parser.add_argument("--exact_pg_computation", default=False, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help="Mimic to the exact computation of the proximal operator.") 
     parser.add_argument("--exact_pg_computation_tol", type=float, default=1e-15, help="Deisred error tolerance.")                                                                      
-    parser.add_argument("--ipg_strategy", type=str, default="diminishing", choices=["diminishing"], 
-        help="Strategy to inexactly evaluate the proximal operator.\ndiminishing: c * np.log(k+1) / k**delta")
+
     parser.add_argument("--ipg_do_linesearch", default=True, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help="Whether do linesearch in the projected gradient ascent.")
     parser.add_argument("--ipg_linesearch_eta", type=float, default=1e-4, help="eta of the linesearch.")
     parser.add_argument("--ipg_linesearch_xi", type=float, default=0.8, help="xi of the linesearch.")
     parser.add_argument("--ipg_linesearch_beta", type=float, default=1.2, help="beta of the linesearch.")
     parser.add_argument("--ipg_linesearch_limits", type=int, default=100, help="max attempts of the linesearch.")
+    
+    parser.add_argument("--ipg_strategy", type=str, default="diminishing", choices=["diminishing"], 
+        help="Strategy to inexactly evaluate the proximal operator.\ndiminishing: c * np.log(k+1) / k**delta")
     parser.add_argument("--ipg_diminishing_c", type=float, default=1, help="c of c * np.log(k+1) / k**delta")
     parser.add_argument("--ipg_diminishing_delta", type=float, default=2, help="delta of c * np.log(k+1) / k**delta")
     config = parser.parse_args()
@@ -31,6 +33,7 @@ groups = [[0,1,2], [1,2,3], [0,2,4]]
 print('using:', groups)
 config = get_config()
 r = NatOG(groups, penalty=1.0, config=config, weights=np.array([1,100,1]))
+print(isinstance(r, NatOG))
 print(r.A.todense())
 print(r.xdim)
 np.random.seed(0)
