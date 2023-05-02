@@ -4,7 +4,7 @@
 # Created Date: 2021-08-23 11:31
 # Author: Yutong Dai yutongdai95@gmail.com
 # -----
-# Last Modified: 2022-09-27 9:34
+# Last Modified: 2023-05-01 9:32
 # Modified By: Yutong Dai yutongdai95@gmail.com
 # 
 # This code is published under the MIT License.
@@ -154,41 +154,30 @@ def estimate_lipschitz(A, loss='logit'):
     return L
 
 
-class GenOverlapGroup:
-    def __init__(self, dim, grp_size=None, overlap_ratio=None):
-        self.dim = dim
-        self.grp_size = grp_size
-        self.overlap_ratio = overlap_ratio
-
-    def get_group(self):
-        if self.grp_size is not None and self.overlap_ratio is not None:
-            if self.grp_size >= self.dim:
-                raise ValueError(
-                    "grp_size is too large that each group has all variables.")
-            overlap = int(self.grp_size * self.overlap_ratio)
-            if overlap < 1:
-                msg = "current config of grp_size and overlap_ratio cannot produce overlapping groups.\n"
-                msg += "overlap_ratio is adjusted to have at least one overlap."
-                warnings.warn(msg)
-                overlap = 1
-            groups = []
-            starts = []
-            ends = []
-            start = 0
-            end = self.grp_size - 1
-            while True:
-                starts.append(start)
-                ends.append(end)
-                groups.append([*range(start, end + 1)])
-                # update
-                start = end - (overlap - 1)
-                end = min(start + self.grp_size - 1, self.dim - 1)
-                if end == ends[-1]:
-                    break
-            return groups, starts, ends
-        else:
-            raise ValueError("check your inputs!")
-
+def gen_natovrlp_group(dim, grp_size, overlap_ratio):
+    if grp_size >= dim:
+        raise ValueError("grp_size is too large that each group has all variables.")
+    overlap = int(grp_size * overlap_ratio)
+    if overlap < 1:
+        msg = "current config of grp_size and overlap_ratio cannot produce overlapping groups.\n"
+        msg += "overlap_ratio is adjusted to have at least one overlap."
+        warnings.warn(msg)
+        overlap = 1
+    groups = []
+    starts = []
+    ends = []
+    start = 0
+    end = grp_size - 1
+    while True:
+        starts.append(start)
+        ends.append(end)
+        groups.append([*range(start, end + 1)])
+        # update
+        start = end - (overlap - 1)
+        end = min(start + grp_size - 1, dim - 1)
+        if end == ends[-1]:
+            break
+    return groups, starts, ends
 
 def calculate_id_params(x, gradfx, weights, starts, ends):
     K = len(starts)

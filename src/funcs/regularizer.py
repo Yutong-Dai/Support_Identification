@@ -1,8 +1,10 @@
 import numpy as np
 from numba import jit
 from numba.typed import List
-from scipy.sparse import csr_matrix
-
+from scipy.sparse import coo_matrix
+import sys
+sys.path.append("../")
+from src.utils import l2_norm
 
 class GL1:
     def __init__(self, groups, penalty=None, weights=None):
@@ -195,19 +197,17 @@ class GL1:
 
 
 class NatOG:
-    def __init__(self, groups, penalty=1.0, weights=None, config=None):
+    def __init__(self, groups, penalty, config, weights=None):
         """
             groups: [[0,1,3,4], [0,2,4,5], [1,3,6]]
                 index begins with 0
                 all coordinates need to be included
                 within each group the index needs to be sorted
         """
-        if config is None:
-            raise ValueError("self.config is not provided")
-        else:
-            self.config = config
+        self.config = config
         if weights is not None:
             assert len(groups) == len(weights), "groups and weights should be of the same length"
+            assert isinstance(weights, (np.ndarray, np.generic)), "weights should be a numpy array"
         self.penalty = penalty
         self.K = len(groups)
         if weights is None:
@@ -228,6 +228,7 @@ class NatOG:
             self.groups.append(np.array(g))
         # actual dimension
         p = max(groups_flattern) + 1
+        self.xdim = p
         rows, cols = [], []
         for (colidx, rowidx) in enumerate(groups_flattern):
             rows.append(rowidx)
@@ -286,13 +287,13 @@ class NatOG:
             if self.config.ipg_strategy == 'diminishing':
                 # outter iteration counter begins with 0, therefore add 1
                 k = ipg_kwargs['iteration'] + 1
-                self.targap = self.config.ipg_diminishing_c * np.log(k+1) / k**self.ipg_diminishing_delta
+                self.targap = self.config.ipg_diminishing_c * np.log(k+1) / k**self.config.ipg_diminishing_delta
             else:
                 raise ValueError(f"Unrecognized ipg_strategy value:{self.config.ipg_strategy}")
         else:
             self.targap = self.config.exact_pg_computation_tol
 
-        dual_val_ycurrent = prox_dual(self.A @ y_current, uk, alphak)[0][0]
+        dual_val_ycurrent = self.prox_dual(self.A @ y_current, uk, alphak)[0][0]
         grad_psi_ycurrent = (alphak * self.ATA @ y_current + ATuk)
         self.total_bak = 0
         while True:
@@ -302,7 +303,7 @@ class NatOG:
             if self.config.ipg_do_linesearch:
                 while True:
                     ytrial, projected_group = self._proj_norm_ball(y_current - self.stepsize * grad_psi_ycurrent)
-                    dual_val = prox_dual(self.A @ ytrial, uk, alphak)[0][0]
+                    dual_val = self.prox_dual(self.A @ ytrial, uk, alphak)[0][0]
                     LHS = -(dual_val - dual_val_ycurrent)
                     RHS = (self.config.ipg_linesearch_eta *(grad_psi_ycurrent.T @ (ytrial - y_current)))[0][0]
                     if (LHS <= RHS) or (np.abs(np.abs(LHS) - np.abs(RHS)) < 1e-15):
@@ -317,7 +318,7 @@ class NatOG:
                     bak += 1
             else:
                 ytrial, projected_group = self._proj_norm_ball(y_current - self.stepsize * grad_psi_ycurrent)
-                dual_val = prox_dual(self.A @ ytrial, uk, alphak)[0][0]
+                dual_val = self.prox_dual(self.A @ ytrial, uk, alphak)[0][0]
 
             # get the primal approximate solution from the dual
             xtrial = alphak * (self.A @ ytrial) + uk
@@ -329,7 +330,7 @@ class NatOG:
             ######################### check for termination ###############################
             # first check the projected primal
             rxtrial_proj = self.func(xtrial_proj)
-            primal_val_proj = prox_primal(xtrial_proj, uk, alphak, rxtrial_proj)
+            primal_val_proj = self.prox_primal(xtrial_proj, uk, alphak, rxtrial_proj)
             gap = (primal_val_proj - dual_val)
             if gap < self.targap:
                 xtrial = xtrial_proj
@@ -338,7 +339,7 @@ class NatOG:
                 break
             # then check the un-projected primal
             rxtrial = self.func(xtrial)
-            primal_val = prox_primal(xtrial, uk, alphak, rxtrial)
+            primal_val = self.prox_primal(xtrial, uk, alphak, rxtrial)
             gap = (primal_val - dual_val)
             if gap < self.targap:
                 self.flag = 'desired'
@@ -349,7 +350,7 @@ class NatOG:
                 # attemp a correction step
                 x_correction = self.correction_step(xtrial, kwargs['xref'])
                 rx_correction = self.func(x_correction)
-                primal_val_correction = prox_primal(x_correction, uk, alphak, rx_correction)
+                primal_val_correction = self.prox_primal(x_correction, uk, alphak, rx_correction)
                 gap_corrected = primal_val_correction - dual_val
                 if primal_val_correction <= primal_val:
                     xtrial = x_correction
@@ -364,7 +365,7 @@ class NatOG:
             dual_val_ycurrent = dual_val
             # if no backtracking is performed, increase the stepsize for the next iteration
             if bak == 0:
-                self.stepsize *= self.config.linesearch_beta
+                self.stepsize *= self.config.ipg_linesearch_beta
         # post-processing
         self.gap = gap
         self.aoptim = l2_norm(xtrial - xk)
@@ -372,8 +373,21 @@ class NatOG:
         return xtrial, ytrial, self.aoptim
 
     def _proj_norm_ball(self, y):
-        return _proj_norm_ball_jit(y, self.K, self.starts, self.ends, self.weights)
+        return self._proj_norm_ball_jit(y, self.K, self.starts, self.ends, self.weights)
 
+    @staticmethod
+    @jit(nopython=True, cache=True)
+    def _proj_norm_ball_jit(y, K, starts, ends, weights):
+        projected_group = {}
+        for i in range(K):
+            start, end = starts[i], ends[i]
+            y_Gi = y[start:end]
+            norm_y_Gi = np.sqrt(np.dot(y_Gi.T, y_Gi))[0][0]
+            if norm_y_Gi > weights[i]:
+                y[start:end] = (weights[i] / norm_y_Gi) * y_Gi
+                projected_group[i] = i
+        return y, projected_group
+    
     def _get_group_structure(self, X):
         return self._get_group_structure_jit(X, self.K, self.groups)
 
@@ -399,3 +413,11 @@ class NatOG:
             if np.sum(np.abs(xref[g])) == 0:
                 x_corrected[g] = 0.0
         return x_corrected
+
+    @staticmethod
+    def prox_primal(xk, uk, alphak, rxk):
+        return (0.5 / alphak) * l2_norm(xk - uk) ** 2 + rxk
+
+    @staticmethod
+    def prox_dual(y, uk, alphak):
+        return -(alphak / 2 * l2_norm(y) ** 2 + uk.T @ y)

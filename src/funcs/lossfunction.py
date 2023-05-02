@@ -33,6 +33,15 @@ class LogisticLoss:
         else:
             self.expterm = np.exp(-(self.y) * (self.X @ weight + bias))
 
+    def func(self, weight):
+        """
+        # Don't delete this function
+        function value of logistic loss function evaluate at the given point weight.
+        f(weight) = frac{1}{n} sum_{i=1}^n log(1+exp(y_i * weight^T * x_i))
+        """
+        f = self.evaluate_function_value(weight, bias=0, idx=None)
+        return f
+
     def evaluate_function_value(self, weight, bias=0, idx=None):
         """
         function value of logistic loss function evaluate at the given point (weight, bias).
@@ -104,5 +113,9 @@ class LeastSquares:
         return f
 
     def gradient(self):
+        """
+        need to be called after `evaluate_function_value` to get correct `expterm`
+        """
         gradient = self.matvec.T @ self.X / self.n
         return gradient.T + self.weight_decay * self.weight
+
