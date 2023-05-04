@@ -4,7 +4,7 @@
 # Created Date: 2021-08-23 11:31
 # Author: Yutong Dai yutongdai95@gmail.com
 # -----
-# Last Modified: 2023-05-01 9:32
+# Last Modified: 2023-05-03 10:24
 # Modified By: Yutong Dai yutongdai95@gmail.com
 # 
 # This code is published under the MIT License.
@@ -91,6 +91,33 @@ def gen_group(p, K):
     group = {'starts': np.array(starts), 'ends': np.array(ends), 'group_frequency': np.array(group_frequency)}
     return group
 
+def gen_natovrlp_group(dim, grp_size, overlap_ratio):
+    if grp_size >= dim:
+        raise ValueError("grp_size is too large that each group has all variables.")
+    overlap = int(grp_size * overlap_ratio)
+    if overlap < 1:
+        msg = "current config of grp_size and overlap_ratio cannot produce overlapping groups.\n"
+        msg += "overlap_ratio is adjusted to have at least one overlap."
+        warnings.warn(msg)
+        overlap = 1
+    groups = []
+    starts = []
+    ends = []
+    group_frequency = []
+    start = 0
+    end = grp_size
+    while True:
+        starts.append(start)
+        ends.append(end)
+        group_frequency.append(end - start)
+        groups.append([*range(start, end)])
+        # update
+        start = end - overlap
+        end = min(start + grp_size, dim)
+        if end == ends[-1]:
+            break
+    group = {'groups':groups, 'starts': np.array(starts), 'ends': np.array(ends), 'group_frequency': np.array(group_frequency)}
+    return group
 
 def lam_max(X, y, group, loss='logit'):
     """
@@ -129,17 +156,6 @@ def lam_max_jit(starts, ends, group_frequency, nabla_L, progress_proxy):
         progress_proxy.update(1)
     return lam_max
 
-# def estimate_lipschitz(A, loss='logit'):
-#     m, n = A.shape
-#     if loss == 'ls':
-#         hess = A.T @ A / m
-#     elif loss == 'logit':
-#         # acyually this is an upper bound on hess
-#         hess = A.T @ A / (4 * m)
-#     hess = hess.toarray()
-#     L = np.max(np.linalg.eigvalsh(hess))
-#     return L
-
 
 def estimate_lipschitz(A, loss='logit'):
     m, n = A.shape
@@ -148,36 +164,15 @@ def estimate_lipschitz(A, loss='logit'):
     elif loss == 'logit':
         # acyually this is an upper bound on hess
         hess = A.T @ A / (4 * m)
+    else:
+        raise ValueError("Invalid loss!")        
     # compute the largest eigenval
     eigenval, eigenvec = scipy.sparse.linalg.eigsh(hess, k=1)
     L = eigenval[0]
     return L
 
 
-def gen_natovrlp_group(dim, grp_size, overlap_ratio):
-    if grp_size >= dim:
-        raise ValueError("grp_size is too large that each group has all variables.")
-    overlap = int(grp_size * overlap_ratio)
-    if overlap < 1:
-        msg = "current config of grp_size and overlap_ratio cannot produce overlapping groups.\n"
-        msg += "overlap_ratio is adjusted to have at least one overlap."
-        warnings.warn(msg)
-        overlap = 1
-    groups = []
-    starts = []
-    ends = []
-    start = 0
-    end = grp_size - 1
-    while True:
-        starts.append(start)
-        ends.append(end)
-        groups.append([*range(start, end + 1)])
-        # update
-        start = end - (overlap - 1)
-        end = min(start + grp_size - 1, dim - 1)
-        if end == ends[-1]:
-            break
-    return groups, starts, ends
+
 
 def calculate_id_params(x, gradfx, weights, starts, ends):
     K = len(starts)

@@ -13,7 +13,6 @@ from src.solvers.BaseSolver import StoBaseSolver
 class ProxSAGA(StoBaseSolver):
     def __init__(self, f, r, config):
         self.stepsize_strategy = config.proxsaga_stepsize
-        self.version = "0.1 (2022-09-01)"
         self.solver = "ProxSAGA"
         super().__init__(f, r, config)
 
@@ -43,9 +42,7 @@ class ProxSAGA(StoBaseSolver):
         nz_seq = []
         grad_error_seq = []
         x_seq = []
-
-        self.compute_id_quantity = False
-
+        self.best_sol_so_far = xk
         # start computing
 
         while True:
@@ -97,8 +94,22 @@ class ProxSAGA(StoBaseSolver):
                                    axis=1) + np.sum(gradfxk_minibacth_table, axis=1, keepdims=True)) / self.n
                 # update gradtable
                 grad_table[:, minibatch_idx] = gradfxk_minibacth_table
-
-                xkp1, _, _ = self.r.compute_proximal_gradient_update(xk, self.alphak, dk)
+                if self.solve_mode == "exact":
+                    xkp1, _, _ = self.r.compute_proximal_gradient_update(xk, self.alphak, dk)
+                elif self.solve_mode == "inexact":
+                    xkp1, ykp1 = self.r.compute_inexact_proximal_gradient_update(
+                            xk, self.alphak, dk, self.yk, self.stepsize_init, ipg_kwargs={'iteration':self.num_epochs, 'xref':self.best_sol_so_far})
+                    self.yk = ykp1
+                    self.stepsize_init = self.r.stepsize
+                    if self.r.flag != 'maxiter':
+                        self.best_sol_so_far = xkp1
+                    if self.config.ipg_save_log:
+                        if i % 40 == 0:
+                            self.r.print_header(filename=self.ipg_log_filename)
+                        self.r.print_iteration(epoch = self.num_epochs, batch=i+1, filename=self.ipg_log_filename)                
+                else:
+                    raise ValueError("Unknown solve mode.")
+                
                 self.iteration += 1
                 xk = deepcopy(xkp1)
 
@@ -110,7 +121,10 @@ class ProxSAGA(StoBaseSolver):
         return self.collect_info(xk, F_seq, nz_seq, grad_error_seq, x_seq)
 
     def print_header(self):
-        header = " Epoch.   Obj.    alphak      #z   #nz   |egradf| |   optim     #pz    #pnz |"
+        if self.config.compute_optim:
+            header = " Epoch.   Obj.    alphak      #z   #nz   |egradf| |   optim     #pz    #pnz |"
+        else:
+            header = " Epoch.   Obj.    alphak      #z   #nz   |egradf| "
         header += "\n"
         if self.filename is not None:
             with open(self.filename, "a") as logfile:
@@ -119,7 +133,10 @@ class ProxSAGA(StoBaseSolver):
             print(header)
 
     def print_epoch(self):
-        contents = f" {self.num_epochs:5d} {self.Fxk:.3e} {self.alphak:.3e} {self.nz:5d} {self.nnz:5d}  {self.grad_error:.3e} | {self.optim:.3e} {self.pz:5d}  {self.pnz:5d}  |"
+        if self.config.compute_optim:
+            contents = f" {self.num_epochs:5d} {self.Fxk:.3e} {self.alphak:.3e} {self.nz:5d} {self.nnz:5d}  {self.grad_error:.3e} | {self.optim:.3e} {self.pz:5d}  {self.pnz:5d}  |"
+        else:
+            contents = f" {self.num_epochs:5d} {self.Fxk:.3e} {self.alphak:.3e} {self.nz:5d} {self.nnz:5d}  {self.grad_error:.3e}"
         contents += "\n"
         if self.filename is not None:
             with open(self.filename, "a") as logfile:

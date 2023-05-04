@@ -36,3 +36,29 @@ https://archive.ics.uci.edu/ml/machine-learning-databases/00413/dataset.zip
 https://archive.ics.uci.edu/ml/machine-learning-databases/00216/amzn-anon-access-samples.tgz
 https://archive.ics.uci.edu/ml/machine-learning-databases/00248/regression.tar.gz
 https://archive.ics.uci.edu/ml/machine-learning-databases/00363/Dataset.zip
+
+
+
+# Proposed Experiments
+
+## Support Identification (Tree structure)
+Using the simulated dataset $D=(A,b)$ and solve $\frac{1}{2}\|Ax-b\|^2 + \lambda r(x)$, where $A$ is full column rank and $r(x)$ encodes the overlapping groups with a tree structure. The prox-operator can be comuted exactly using an iterative solver, which converges in $|n_G|$ iterations. Then we can use any proximal-gradient type methods to compute the "ground truth".
+
+
+## Arbitrarily overlapping (Chain Like)
+
+Using the one that has the best solution quality in terms of 
+1. the two solutions have the smallest objective value
+2. among these two choose whichever has the spartest structure as the ground truth solution.
+
+## Strongly Convex Case
+
+$\text{logistic loss} + 10^{-5}\|x\|^2 + \lambda r(x)$. 
+
+## Convex Case
+
+$\frac{1}{2}\|Ax-b\|^2 + \lambda r(x)$: $A\in R^{m\times n}$ and $m\leq n$.
+
+---
+
+# Scope of this paper? Focus on support identificaiton or change the empahsis on the algortihm itself.

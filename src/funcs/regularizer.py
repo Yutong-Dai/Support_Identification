@@ -205,14 +205,16 @@ class NatOG:
                 within each group the index needs to be sorted
         """
         self.config = config
+        if type(groups) != list:
+            groups = groups['groups']
         if weights is not None:
             assert len(groups) == len(weights), "groups and weights should be of the same length"
             assert isinstance(weights, (np.ndarray, np.generic)), "weights should be a numpy array"
-        self.penalty = penalty
-        self.K = len(groups)
-        if weights is None:
+        else:
             weights = np.array([np.sqrt(len(g)) for g in groups])
+        self.penalty = penalty            
         self.weights = self.penalty * weights
+        self.K = len(groups)
         # group structure to matrix representation
         self.lifted_dimension = 0
         self.groups_dict = {}
@@ -285,9 +287,8 @@ class NatOG:
         self.inner_its = 0
         if not self.config.exact_pg_computation:
             if self.config.ipg_strategy == 'diminishing':
-                # outter iteration counter begins with 0, therefore add 1
-                k = ipg_kwargs['iteration'] + 1
-                self.targap = self.config.ipg_diminishing_c * np.log(k+1) / k**self.config.ipg_diminishing_delta
+                k = ipg_kwargs['iteration']
+                self.targap = self.config.ipg_diminishing_c * np.log(k+1) / (k+1)**self.config.ipg_diminishing_delta
             else:
                 raise ValueError(f"Unrecognized ipg_strategy value:{self.config.ipg_strategy}")
         else:
@@ -348,7 +349,7 @@ class NatOG:
             if self.inner_its > self.config.ipg_linesearch_limits:
                 self.flag = 'maxiter'
                 # attemp a correction step
-                x_correction = self.correction_step(xtrial, kwargs['xref'])
+                x_correction = self.correction_step(xtrial, ipg_kwargs['xref'])
                 rx_correction = self.func(x_correction)
                 primal_val_correction = self.prox_primal(x_correction, uk, alphak, rx_correction)
                 gap_corrected = primal_val_correction - dual_val
@@ -370,8 +371,7 @@ class NatOG:
         self.gap = gap
         self.aoptim = l2_norm(xtrial - xk)
         self.xtrial = xtrial
-        return xtrial, ytrial, self.aoptim
-
+        return xtrial, ytrial
     def _proj_norm_ball(self, y):
         return self._proj_norm_ball_jit(y, self.K, self.starts, self.ends, self.weights)
 
@@ -421,3 +421,15 @@ class NatOG:
     @staticmethod
     def prox_dual(y, uk, alphak):
         return -(alphak / 2 * l2_norm(y) ** 2 + uk.T @ y)
+
+    def print_header(self, **kwargs):
+        header = " Epoch/batch   iters.   Flag  Stepsize   baks    Gap    tarGap"
+        header += "\n"
+        with open(kwargs['filename'], "a") as logfile:
+            logfile.write(header)
+    
+    def print_iteration(self, **kwargs):
+        contents = f" {kwargs['epoch']:4d}/{kwargs['batch']:5d}  {self.inner_its:5d} {self.flag} {self.stepsize:.3e}  {self.total_bak:4d} {self.gap:+.3e} {self.targap:+.3e} "
+        contents += "\n"
+        with open(kwargs['filename'], "a") as logfile:
+            logfile.write(contents)

@@ -13,7 +13,6 @@ from src.solvers.BaseSolver import StoBaseSolver
 class ProxSVRG(StoBaseSolver):
     def __init__(self, f, r, config):
         self.stepsize_strategy = config.proxsvrg_stepsize
-        self.version = "0.1 (2022-09-01)"
         self.solver = "ProxSVRG"
         super().__init__(f, r, config)
 
@@ -40,6 +39,7 @@ class ProxSVRG(StoBaseSolver):
         grad_error_seq = []
         x_seq = []
         vk = 1e17
+        self.best_sol_so_far = xk
         while True:
             self.time_so_far = time.time() - start
 
@@ -85,17 +85,30 @@ class ProxSVRG(StoBaseSolver):
                     _ = self.f.evaluate_function_value(xk, bias=0, idx=minibatch_idx)
                     gradf_minibacth_old = self.f.gradient(xk, idx=minibatch_idx)
                     vk = gradf_minibacth - gradf_minibacth_old + gradfxk
-                    x_minibatch, _, _ = self.r.compute_proximal_gradient_update(x_minibatch, self.alphak, vk)
+                    if self.solve_mode == "exact":
+                        x_minibatch, _, _ = self.r.compute_proximal_gradient_update(x_minibatch, self.alphak, vk)
+                    elif self.solve_mode == "inexact":
+                        x_minibatch, ykp1 = self.r.compute_inexact_proximal_gradient_update(
+                                x_minibatch, self.alphak, vk, self.yk, self.stepsize_init, ipg_kwargs={'iteration':self.num_epochs, 'xref':self.best_sol_so_far})
+                        self.yk = ykp1
+                        self.stepsize_init = self.r.stepsize
+                        if self.config.ipg_save_log:
+                            if i % 40 == 0:
+                                self.r.print_header(filename=self.ipg_log_filename)
+                            self.r.print_iteration(epoch = self.num_epochs, batch=i+1, filename=self.ipg_log_filename)                          
+                    else:
+                        raise ValueError("Unknown solve mode: {}".format(self.solve_mode))
+
                     if self.config.proxsvrg_epoch_iterate == 'average':
                         x_running += x_minibatch
-                    # time_one_minibatch = time.time() - time_one_minibatch_start
-                    # print(f"{i+1}/{self.num_batches}:{time_one_minibatch:.1f} secs")
                 self.num_data_pass += 1
                 # evaluate the function value after a full pass over the data
                 if self.config.proxsvrg_epoch_iterate == 'average':
                     x_full_pass = x_running / ((m + 1) * self.num_batches)
                 else:
                     x_full_pass = x_minibatch
+                if self.solve_mode == "inexact" and self.r.flag != 'maxiter':
+                    self.best_sol_so_far = x_full_pass
                 F_full_pass = self.f.func(x_full_pass) + self.r.func(x_full_pass)
                 if self.config.save_seq:
                     F_seq.append(F_full_pass)
@@ -127,7 +140,10 @@ class ProxSVRG(StoBaseSolver):
         return self.collect_info(xk, F_seq, nz_seq, grad_error_seq, x_seq)
 
     def print_header(self):
-        header = " Epoch.   Obj.    alphak      #z   #nz   |egradf| |   optim     #pz    #pnz |"
+        if self.config.compute_optim:
+            header = " Epoch.   Obj.    alphak      #z   #nz   |egradf| |   optim     #pz    #pnz |"
+        else:
+            header = " Epoch.   Obj.    alphak      #z   #nz   |egradf| "
         header += "\n"
         if self.filename is not None:
             with open(self.filename, "a") as logfile:
@@ -136,7 +152,10 @@ class ProxSVRG(StoBaseSolver):
             print(header)
 
     def print_epoch(self):
-        contents = f" {self.num_epochs:5d} {self.Fxk:.3e} {self.alphak:.3e} {self.nz:5d} {self.nnz:5d}  {self.grad_error:.3e} | {self.optim:.3e} {self.pz:5d}  {self.pnz:5d}  |"
+        if self.config.compute_optim:
+            contents = f" {self.num_epochs:5d} {self.Fxk:.3e} {self.alphak:.3e} {self.nz:5d} {self.nnz:5d}  {self.grad_error:.3e} | {self.optim:.3e} {self.pz:5d}  {self.pnz:5d}  |"
+        else:
+            contents = f" {self.num_epochs:5d} {self.Fxk:.3e} {self.alphak:.3e} {self.nz:5d} {self.nnz:5d}  {self.grad_error:.3e}"
         contents += "\n"
         if self.filename is not None:
             with open(self.filename, "a") as logfile:

@@ -13,7 +13,6 @@ from src.solvers.BaseSolver import StoBaseSolver
 class SPStorm(StoBaseSolver):
     def __init__(self, f, r, config):
         self.stepsize_strategy = config.spstorm_stepsize
-        self.version = "0.1 (2022-09-16)"
         self.solver = "SPStorm"
         super().__init__(f, r, config)
 
@@ -24,7 +23,7 @@ class SPStorm(StoBaseSolver):
         else:
             xk = x_init
         xkm1 = deepcopy(xk)
-        yk = deepcopy(xk)
+        zk = deepcopy(xk)
 
         if self.n % self.config.batchsize == 0:
             self.num_batches = self.n // self.config.batchsize
@@ -40,16 +39,12 @@ class SPStorm(StoBaseSolver):
         nz_seq = []
         grad_error_seq = []
         x_seq = []
+        self.best_sol_so_far = xk
 
         if self.stepsize_strategy == "const":
             self.alphak = alpha_init
         else:
-            # this choice is inspired by
-            # Momentum-based variance-reduced proximal stochastic gradient method for composite nonconvex stochastic optimization
-            # https://arxiv.org/abs/2006.00425
-            # used in the non-convex setting
-            stepconst = np.power(4, 1 / 3) / (8 * Lg)
-            self.alphak = stepconst / np.power(self.iteration + 4, 1 / 3)
+            raise ValueError(f"Invalid stepsize_strategy:{self.stepsize_strategy}")
         self.betak = 1.0
         if self.config.spstorm_zeta == 'dynanmic':
             self.zeta = 1.0
@@ -57,17 +52,14 @@ class SPStorm(StoBaseSolver):
             self.zeta = self.config.spstorm_zeta
         else:
             raise ValueError(f"Invalid zeta parameter:{self.config.spstorm_zeta}")
-        self.compute_id_quantity = False
 
         # start computing
         dk = 1e17
         while True:
             self.time_so_far = time.time() - start
-            if self.config.spstorm_interpolate:
-                # override the default self.check_termination
-                signal, gradfxk = self.check_termination_new(xk, yk)
-            else:
-                signal, gradfxk = self.check_termination(xk)
+            signal, gradfxk = self.check_termination(xk)
+            # check sparsity at zk
+            self.nnz, self.nz = self.r._get_group_structure(zk)
 
             self.grad_error = utils.l2_norm(dk - gradfxk)
 
@@ -103,12 +95,8 @@ class SPStorm(StoBaseSolver):
                 else:
                     _ = self.f.evaluate_function_value(xkm1, bias=0, idx=minibatch_idx)
                     uk = self.f.gradient(xkm1, idx=minibatch_idx)
-                    if self.stepsize_strategy == "diminishing":
-                        self.alphakp1 = stepconst / np.power(self.iteration + 4 + 1, 1 / 3)
-                        self.betak = (1 + 24 * self.alphak**2 * Lg**2 - self.alphakp1 / self.alphak) / (1 + 4 * self.alphak**2 * Lg**2)
-                    elif self.stepsize_strategy == "const":
+                    if self.stepsize_strategy == "const":
                         if self.config.spstorm_betak == -1.0:
-                            # self.betak = (24 * self.alphak**2 * Lg**2) / (1 + 4 * self.alphak**2 * Lg**2)
                             self.betak = 1.0 / (self.iteration + 1)
                         else:
                             self.betak = self.config.spstorm_betak
@@ -117,22 +105,28 @@ class SPStorm(StoBaseSolver):
 
                     dk = vk + (1 - self.betak) * (dkm1 - uk)
                 # new iterate
-                yk, _, _ = self.r.compute_proximal_gradient_update(xk, self.alphak, dk)
-                if self.config.spstorm_interpolate:
-                    if self.config.spstorm_zeta == 'dynanmic' and self.iteration > 0:
-                        self.zeta = self.iteration
-                    xkp1 = xk + self.zeta * self.betak * (yk - xk)
-                else:
-                    xkp1 = yk
+                if self.solve_mode == "exact":
+                    zk, _, _ = self.r.compute_proximal_gradient_update(xk, self.alphak, dk)
+                elif self.solve_mode == "inexact":
+                    zk, ykp1 = self.r.compute_inexact_proximal_gradient_update(
+                        xk, self.alphak, dk, self.yk, self.stepsize_init, ipg_kwargs={'iteration':self.num_epochs, 'xref':self.best_sol_so_far})
+                    self.yk = ykp1
+                    self.stepsize_init = self.r.stepsize
+                    if self.r.flag != 'maxiter':
+                        self.best_sol_so_far = zk
+                    if self.config.ipg_save_log:
+                        if i % 40 == 0:
+                            self.r.print_header(filename=self.ipg_log_filename)
+                        self.r.print_iteration(epoch = self.num_epochs, batch=i+1, filename=self.ipg_log_filename)
+                            
+                if self.config.spstorm_zeta == 'dynanmic' and self.iteration > 0:
+                    self.zeta = self.iteration
+                xkp1 = xk + self.zeta * self.betak * (zk - xk)
                 self.iteration += 1
-
-                # adjust stepsize
-                if self.stepsize_strategy == "diminishing":
-                    self.alphak = stepconst / np.power(self.iteration + 4, 1 / 3)
-
                 dkm1 = deepcopy(dk)
                 xkm1 = deepcopy(xk)
                 xk = deepcopy(xkp1)
+                
 
         # return solutions
         self.xend = xk
@@ -141,9 +135,10 @@ class SPStorm(StoBaseSolver):
         return self.collect_info(xk, F_seq, nz_seq, grad_error_seq, x_seq)
 
     def print_header(self):
-        header = " Epoch.   Obj.    alphak     betak      zeta      #z   #nz   |egradf| |   optim     #pz    #pnz |"
-        if self.compute_id_quantity:
-            header += "  id_left    id_right  maxq<delta |"
+        if self.config.compute_optim:
+            header = " Epoch.   Obj.    alphak     betak      zeta      #z   #nz   |egradf| |   optim     #pz    #pnz |"
+        else:
+            header = " Epoch.   Obj.    alphak     betak      zeta      #z   #nz   |egradf|"
         header += "\n"
         if self.filename is not None:
             with open(self.filename, "a") as logfile:
@@ -152,9 +147,10 @@ class SPStorm(StoBaseSolver):
             print(header)
 
     def print_epoch(self):
-        contents = f" {self.num_epochs:5d} {self.Fxk:.3e} {self.alphak:.3e} {self.betak:.3e} {self.zeta:.3e} {self.nz:5d} {self.nnz:5d}  {self.grad_error:.3e} | {self.optim:.3e} {self.pz:5d}  {self.pnz:5d}  |"
-        if self.compute_id_quantity:
-            contents += f" {self.id_left:.3e}  {self.id_rifgt:.3e}    {str(self.check):5s}    |"
+        if self.config.compute_optim:
+            contents = f" {self.num_epochs:5d} {self.Fxk:.3e} {self.alphak:.3e} {self.betak:.3e} {self.zeta:.3e} {self.nz:5d} {self.nnz:5d}  {self.grad_error:.3e} | {self.optim:.3e} {self.pz:5d}  {self.pnz:5d}  |"
+        else:
+            contents = f" {self.num_epochs:5d} {self.Fxk:.3e} {self.alphak:.3e} {self.betak:.3e} {self.zeta:.3e} {self.nz:5d} {self.nnz:5d}  {self.grad_error:.3e} "
         contents += "\n"
         if self.filename is not None:
             with open(self.filename, "a") as logfile:
@@ -162,29 +158,4 @@ class SPStorm(StoBaseSolver):
         else:
             print(contents)
 
-    def check_termination_new(self, xk, yk):
-        # override the default behavior
-        fxk = self.f.func(xk)
-        rxk = self.r.func(xk)
-        self.Fxk = fxk + rxk
-        self.nnz, self.nz = self.r._get_group_structure(yk)
-        if self.Fxk < self.Fbest:
-            self.xbest = xk
-            self.Fbest = self.Fxk
-            self.nnz_best, self.nz_best = self.nnz, self.nz
-        gradfxk = self.f.gradient(xk, idx=None)
-        xprox, self.pz, self.pnz = self.r.compute_proximal_gradient_update(xk, self.alphak, gradfxk)
-        self.optim = utils.l2_norm(xprox - xk)
-        if self.config.optim_scaled:
-            self.optim = self.optim / max(1e-15, self.alphak)
 
-        if self.optim <= self.config.accuracy:
-            self.status = 0
-            return 'terminate', gradfxk
-        if self.num_epochs >= self.config.max_epochs:
-            self.status = 1
-            return 'terminate', gradfxk
-        if self.time_so_far >= self.config.max_time:
-            self.status = 2
-            return 'terminate', gradfxk
-        return 'continue', gradfxk

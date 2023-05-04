@@ -11,6 +11,7 @@ from src.funcs.regularizer import NatOG, GL1
 
 class StoBaseSolver:
     def __init__(self, f, r, config):
+        self.version = "0.1 (2023-05-02)"
         self.f = f
         self.r = r
         self.n = self.f.n
@@ -23,16 +24,19 @@ class StoBaseSolver:
             self.filename = '{}.txt'.format(self.config.tag)
         else:
             self.filename = None
-        if self.config.print_level > 0:
-            self.print_problem()
-            self.print_config()
         # solver mode
         if isinstance(r, NatOG):
             self.solve_mode = 'inexact'
+            self.yk = None
+            self.stepsize_init = None
+            self.ipg_log_filename = '{}_ipg.txt'.format(self.config.tag)
         elif isinstance(r, GL1):
             self.solve_mode = 'exact'
         else:
-            raise ValueError("Unknown regularizer type.")
+            raise ValueError("Unknown regularizer type.") 
+        if self.config.print_level > 0:
+            self.print_problem()
+            self.print_config()        
         # reproted stats
         self.status = 404
         self.num_epochs = 0
@@ -66,16 +70,17 @@ class StoBaseSolver:
 
     def print_config(self):
         contents = "\n" + "Algorithm Parameters:\n"
-        contents += 'Termination Conditions:'
-        contents += f" accuracy: {self.config.accuracy} | optim scaled: {self.config.optim_scaled} | time limits:{self.config.max_time} | epoch limits:{self.config.max_iters}\n"
-        contents += f"Sampling Setups: batchsize: {self.config.batchsize} | shuffle: {self.config.shuffle}\n"
-        contents += f"Proximal Stepsize update: {self.stepsize_strategy}\n"
+        contents += ' Termination Conditions:\n'
+        contents += f"    accuracy: {self.config.accuracy} | optim scaled: {self.config.optim_scaled} | time limits:{self.config.max_time} | epoch limits:{self.config.max_iters}\n"
+        contents += f" Sampling Setups: batchsize: {self.config.batchsize} | shuffle: {self.config.shuffle}\n"
+        contents += f" Proximal Stepsize update: {self.stepsize_strategy}\n"
+        contents += f" Compute Optimality measure: {self.config.compute_optim}\n"
         if self.solve_mode == 'inexact':
-            contents += f"Inexact Proximal Solver:\n exact solve:{config.exact_pg_computation} | ipg_strategy:{config.ipg_strategy} | ipg_do_linesearch:{config.ipg_do_linesearch}\n"
-            if config.ipg_strategy == 'diminishing':
-                contents += f" ipg_diminishing_c:{config.ipg_diminishing_c} | ipg_diminishing_delta:{config.ipg_diminishing_delta}\n"
-            if config.ipg_do_linesearch:
-                contents += f" ipg_linesearch_eta:{config.ipg_linesearch_eta} | ipg_linesearch_xi:{config.ipg_linesearch_xi} | ipg_linesearch_beta:{config.ipg_linesearch_beta}\n"
+            contents += f"Inexact Proximal Solver:\n exact solve:{self.config.exact_pg_computation} | ipg_strategy:{self.config.ipg_strategy} | ipg_do_linesearch:{self.config.ipg_do_linesearch}\n"
+            if self.config.ipg_strategy == 'diminishing':
+                contents += f" ipg_diminishing_c:{self.config.ipg_diminishing_c} | ipg_diminishing_delta:{self.config.ipg_diminishing_delta}\n"
+            if self.config.ipg_do_linesearch:
+                contents += f" ipg_linesearch_eta:{self.config.ipg_linesearch_eta} | ipg_linesearch_xi:{self.config.ipg_linesearch_xi} | ipg_linesearch_beta:{self.config.ipg_linesearch_beta}\n"
         contents += "*" * 100 + "\n"
         if self.filename is not None:
             with open(self.filename, "a") as logfile:
@@ -103,7 +108,8 @@ class StoBaseSolver:
         contents += f'# zero groups(end):{self.nz:d}\n'
         contents += f'Obj. F(best):{self.Fbest:8.6e}\n'
         contents += f'Obj. F(end):{self.Fend:8.6e}\n'
-        contents += f'Optim.(end):{self.optim:8.6e}\n'
+        if self.config.compute_optim:
+            contents += f'Optim.(end):{self.optim:8.6e}\n'
 
         if self.filename is not None:
             with open(self.filename, "a") as logfile:
@@ -164,14 +170,24 @@ class StoBaseSolver:
         # time_grad = time.time() - time_grad_start
 
         # time_prox_start = time.time()
-        xprox, self.pz, self.pnz = self.r.compute_proximal_gradient_update(xk, self.alphak, gradfxk)
+        if self.config.compute_optim:
+            if self.solve_mode == 'exact':
+                xprox, self.pz, self.pnz = self.r.compute_proximal_gradient_update(xk, self.alphak, gradfxk)
+            elif self.solve_mode == 'inexact':
+                xprox, ykp1 = self.r.compute_inexact_proximal_gradient_update(xk, self.alphak, gradfxk, self.yk, self.stepsize_init, ipg_kwargs={'iteration':self.num_epochs, 'xref':self.best_sol_so_far})
+                self.pnz, self.pz = self.r._get_group_structure(xprox)
+            else:
+                raise NotImplementedError("solve_mode must be either 'exact' or 'inexact'")
+              
         # time_prox = time.time() - time_prox_start
 
         # print(f"feval:{time_f:.1f} secs | reval:{time_r:.1f} secs | Feval:{time_f+time_r:.1f} secs | gradfeval:{time_grad:.1f} secs | proxeval:{time_prox:.1f} secs | time_check_sparsity: {time_check_sparsity:.1f} secs")
-
-        self.optim = utils.l2_norm(xprox - xk)
-        if self.config.optim_scaled:
-            self.optim = self.optim / max(1e-15, self.alphak)
+        if self.config.compute_optim: 
+            self.optim = utils.l2_norm(xprox - xk)
+            if self.solve_mode == 'inexact':
+                self.optim += np.sqrt(2 * np.abs(self.r.gap) * self.alphak)
+            if self.config.optim_scaled:
+                self.optim = self.optim / max(1e-15, self.alphak)
 
         if self.optim <= self.config.accuracy:
             self.status = 0

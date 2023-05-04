@@ -26,8 +26,10 @@ def get_config():
     return config
 
 
-groups, _, _ = gen_natovrlp_group(10, 5, 0.4)
-assert groups == [[0, 1, 2, 3, 4], [3, 4, 5, 6, 7], [6, 7, 8, 9]]
+group = gen_natovrlp_group(10, 5, 0.4)
+print(group)
+assert group['groups'] == [[0, 1, 2, 3, 4], [3, 4, 5, 6, 7], [6, 7, 8, 9]]
+r = NatOG(groups, penalty=1.0, config=config, weights=np.array([1,100,1]))
 
 groups = [[0,1,2], [1,2,3], [0,2,4]]
 print('using:', groups)
@@ -39,9 +41,9 @@ print(r.xdim)
 np.random.seed(0)
 x0 = np.random.randn(r.xdim, 1)
 print(r.func(x0))
-xtrial, ytrial, aoptim = r.compute_inexact_proximal_gradient_update(xk=x0, alphak=1.0, dk=np.random.randn(r.xdim, 1), 
+xtrial, ytrial = r.compute_inexact_proximal_gradient_update(xk=x0, alphak=1.0, dk=np.random.randn(r.xdim, 1), 
                                             y_init=None, stepsize_init=None, 
                                             ipg_kwargs={'iteration':10})
-print(f'target duality gap:{r.targap:.3f} | subsolver status:{r.flag} | aoptim:{aoptim:.3f}')
+print(f'target duality gap:{r.targap:.3f} | subsolver status:{r.flag} | aoptim:{r.aoptim:.3f}')
 print('init x             :', x0.T)
 print('approxmate solution:', xtrial.T)
