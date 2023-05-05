@@ -2,9 +2,11 @@ import numpy as np
 from numba import jit
 from numba.typed import List
 from scipy.sparse import coo_matrix
+import spams
 import sys
 sys.path.append("../")
 from src.utils import l2_norm
+
 
 class GL1:
     def __init__(self, groups, penalty=None, weights=None):
@@ -423,13 +425,97 @@ class NatOG:
         return -(alphak / 2 * l2_norm(y) ** 2 + uk.T @ y)
 
     def print_header(self, **kwargs):
-        header = " Epoch/batch   iters.   Flag  Stepsize   baks    Gap    tarGap"
+        header = " Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap"
         header += "\n"
         with open(kwargs['filename'], "a") as logfile:
             logfile.write(header)
     
     def print_iteration(self, **kwargs):
-        contents = f" {kwargs['epoch']:4d}/{kwargs['batch']:5d}  {self.inner_its:5d} {self.flag} {self.stepsize:.3e}  {self.total_bak:4d} {self.gap:+.3e} {self.targap:+.3e} "
+        contents = f" {kwargs['epoch']:4d}/{kwargs['batch']:5d}  {self.inner_its:5d}    {self.flag}   {self.stepsize:.3e}  {self.total_bak:4d} {self.gap:+.3e} {self.targap:+.3e} "
         contents += "\n"
         with open(kwargs['filename'], "a") as logfile:
             logfile.write(contents)
+
+
+class TreeOG:
+    def __init__(self, groups, tree, penalty, weights=None):
+        """
+        Taken from https://thoth.inrialpes.fr/people/mairal/spams/doc-python/html/doc_spams006.html#sec26
+            # Example 1 of tree structure
+            # tree structured groups:
+            # g1= {0 1 2 3 4 5 6 7 8 9}
+            # g2= {2 3 4}
+            # g3= {5 6 7 8 9}
+            own_variables =  np.array([0,2,5],dtype=np.int32) # pointer to the first variable of each group
+            N_own_variables =  np.array([2,3,5],dtype=np.int32) # number of "root" variables in each group
+            # (variables that are in a group, but not in its descendants).
+            # for instance root(g1)={0,1}, root(g2)={2 3 4}, root(g3)={5 6 7 8 9}
+            eta_g = np.array([1,30,1],dtype=np.float64) # weights for each group, they should be non-zero to use fenchel duality
+            groups = np.asfortranarray([[0,0,0],
+                                        [1,0,0],
+                                        [1,0,0]],dtype = np.bool)
+            # first group should always be the root of the tree
+            # non-zero entriees mean inclusion relation ship, here g2 is a children of g1,
+            # g3 is a children of g1
+            groups = csc_matrix(groups,dtype=np.bool)
+            tree = {'eta_g': eta_g,'groups' : groups,'own_variables' : own_variables,
+                    'N_own_variables' : N_own_variables}
+        """
+        assert len(groups) == len(weights), "groups and weights should be of the same length"
+        self.penalty = penalty
+        self.tree = tree
+        self.K = len(groups)
+        if weights is None:
+            weights = np.array([np.sqrt(len(g)) for g in groups])
+        self.weights = self.penalty * weights
+        self.groups = List()
+        for g in groups:
+            self.groups.append(np.array(g))
+
+    def __str__(self):
+        return("Tree Group L1")
+
+    def func(self, x):
+        return self._func_jit(x, self.groups, self.weights)
+
+    @staticmethod
+    @jit(nopython=True, cache=True)
+    def _func_jit(x, groups, weights):
+        ans = 0.0
+        for i, g in enumerate(groups):
+            xg = x[g]
+            ans += np.sqrt(np.dot(xg.T, xg))[0][0] * weights[i]
+        return ans
+
+    ##############################################
+    #    exact proximal gradient calculation   ###
+    ##############################################
+
+    def compute_exact_proximal_gradient_update(self, xk, alphak, dk, compute_structure=False):
+        """
+            implement the fixed stepsize projected  gradient descent
+        """
+        param = {'numThreads': -1, 'verbose': False, 'pos': False, 'intercept': False, 'lambda1': alphak, 'regul': 'tree-l2'}
+        uk = xk - alphak * dk
+        xtrial = spams.proximalTree(uk, self.tree, False, **param)
+        self.optim = l2_norm(xtrial - xk)
+        if compute_structure:
+            nnz, nz = self._get_group_structure(xtrial)
+            return xtrial, nnz, nz
+        else:
+            return xtrial, _, _
+
+
+    def _get_group_structure(self, X):
+        return self._get_group_structure_jit(X, self.K, self.groups)
+
+    @staticmethod
+    @jit(nopython=True, cache=True)
+    def _get_group_structure_jit(X, K, groups):
+        nz = 0
+        for g in groups:
+            X_Gi = X[g]
+            if (np.sum(np.abs(X_Gi)) == 0):
+                nz += 1
+        nnz = K - nz
+        return nnz, nz            
