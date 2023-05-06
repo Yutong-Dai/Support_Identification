@@ -6,3 +6,4 @@ numpy == 1.20.3
 scipy == 1.7.3
 numba-progress == 0.0.3
 spams == 2.6.5.4
+graphviz == 0.20.1

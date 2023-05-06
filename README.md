@@ -62,3 +62,9 @@ $\frac{1}{2}\|Ax-b\|^2 + \lambda r(x)$: $A\in R^{m\times n}$ and $m\leq n$.
 ---
 
 # Scope of this paper? Focus on support identificaiton or change the empahsis on the algortihm itself.
+
+
+# TroubleShooting
+1. How to install graphviz
+> 1. pip install graphviz
+> 2. sudo apt install graphviz

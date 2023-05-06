@@ -4,7 +4,7 @@
 # Created Date: 2021-08-23 11:31
 # Author: Yutong Dai yutongdai95@gmail.com
 # -----
-# Last Modified: 2023-05-03 10:24
+# Last Modified: 2023-05-05 10:23
 # Modified By: Yutong Dai yutongdai95@gmail.com
 # 
 # This code is published under the MIT License.
@@ -14,17 +14,18 @@
 # ----------	---	----------------------------------------------------------
 '''
 
+import os
 import random
 import numpy as np
 import scipy
 from scipy.io import loadmat
 from sklearn.datasets import load_svmlight_file
-from scipy.sparse import issparse
+from scipy.sparse import issparse, csc_matrix, coo_matrix
 from numba import jit
 import warnings
-import os
 from numba_progress import ProgressBar
-
+import graphviz
+from copy import deepcopy
 
 def mkdirs(dirpath):
     if not os.path.exists(dirpath):
@@ -119,6 +120,67 @@ def gen_natovrlp_group(dim, grp_size, overlap_ratio):
     group = {'groups':groups, 'starts': np.array(starts), 'ends': np.array(ends), 'group_frequency': np.array(group_frequency)}
     return group
 
+def gen_tree(nodes_list, nodes_relation_dict, penalty=1.0, weights=None, visualize=True):
+    """
+    nodes_list: list of list, each list is a node
+    nodes_relation_dict: dict, key is node name, value is a list of edges
+            example: {0: [1,2]}; for edge representation always follow 0 is the ancestor, [1,2] is the descendant
+    """
+    num_nodes = len(nodes_list)
+    if len(nodes_relation_dict) < num_nodes:
+        for i in range(num_nodes):
+            if i not in nodes_relation_dict:
+                nodes_relation_dict[i] = []
+    row_idxs = []
+    col_idxs = []
+    vals = []
+    pseudo_idx = 0
+    if visualize:
+        dot = graphviz.Digraph(comment='Tree Structure')
+    else:
+        dot = None    
+    for node_idx, descendants in nodes_relation_dict.items():
+        if visualize:
+            if len(nodes_list[node_idx]) == 0:
+                label = f"pseudo_{pseudo_idx}"
+                pseudo_idx += 1
+            elif len(nodes_list[node_idx]) == 1:
+                label = str(nodes_list[node_idx][0])
+            else:
+                if len(nodes_list[node_idx]) > 5:
+                    label = f"[{min(nodes_list[node_idx])},...,{max(nodes_list[node_idx])}]"
+                else:
+                    label = ",".join(map(str,nodes_list[node_idx]))
+            dot.node(str(node_idx), label)
+        for descendant_idx in descendants:
+            col_idxs.append(node_idx)
+            row_idxs.append(descendant_idx)
+            vals.append(1)
+            if visualize:
+                dot.edge(str(node_idx), str(descendant_idx))
+    groups_bool = coo_matrix((vals, (row_idxs, col_idxs)), shape=(num_nodes, num_nodes), dtype=bool).tocsc()
+    groups = []
+    for i in range(num_nodes):
+        group = deepcopy(nodes_list[i])
+        working_set = np.where(groups_bool[:,i].toarray().flatten())[0].tolist()
+        included_nodes = []
+        while len(working_set) > 0:
+            working_node_idx = working_set.pop(0)
+            included_nodes.append(working_node_idx)
+            temp = np.where(groups_bool[:,working_node_idx].toarray().flatten())[0].tolist()
+            working_set += temp
+        for d in included_nodes:
+            group += nodes_list[d]
+        groups.append(group)
+    if weights is None:
+        weights = np.sqrt(np.array([len(group) for group in groups]))
+    # pointer to the first variable of each group
+    own_variables = np.array([min(g) for g in groups], dtype=np.int32)
+    # number of "root"(unique) variables in each group
+    N_own_variables = np.array([len(node) for node in nodes_list], dtype=np.int32)
+    tree = {'eta_g': weights * penalty, 'groups': groups_bool, 'own_variables': own_variables, 'N_own_variables': N_own_variables}
+    return groups, tree, dot
+
 def lam_max(X, y, group, loss='logit'):
     """
     Reference: Yi Yang and Hui Zou. A fast unified algorithm for solving group-lasso penalize learning problems. Page 22.
@@ -171,27 +233,6 @@ def estimate_lipschitz(A, loss='logit'):
     L = eigenval[0]
     return L
 
-
-
-
-def calculate_id_params(x, gradfx, weights, starts, ends):
-    K = len(starts)
-    Delta = np.inf
-    delta = np.inf
-    zg = []
-    for g in range(K):
-        start, end = starts[g], ends[g]
-        xg = x[start:end]
-        xg_norm = l2_norm(xg)
-        if xg_norm > 0:
-            Delta = min(Delta, xg_norm)
-            # print(f'xg_norm:{xg_norm:.3e} | Delta:{Delta:.3e}')
-        else:
-            gradfxg_norm = l2_norm(gradfx[start:end])
-            delta = min(weights[g] - gradfxg_norm, delta)
-            zg.append(g)
-            # print(f'xg_norm:{xg_norm:.3e} | delta:{delta:.3e}')
-    return delta, Delta, zg
 
 
 fileTypeDict = {}
