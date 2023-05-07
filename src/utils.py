@@ -1,19 +1,3 @@
-'''
-# File: utils.py
-# Project: ipg
-# Created Date: 2021-08-23 11:31
-# Author: Yutong Dai yutongdai95@gmail.com
-# -----
-# Last Modified: 2023-05-05 10:23
-# Modified By: Yutong Dai yutongdai95@gmail.com
-# 
-# This code is published under the MIT License.
-# -----
-# HISTORY:
-# Date      	By 	Comments
-# ----------	---	----------------------------------------------------------
-'''
-
 import os
 import random
 import numpy as np
@@ -137,6 +121,7 @@ def gen_tree(nodes_list, nodes_relation_dict, penalty=1.0, weights=None, visuali
     pseudo_idx = 0
     if visualize:
         dot = graphviz.Digraph(comment='Tree Structure')
+        # dot.attr('node', shape='circle')
     else:
         dot = None    
     for node_idx, descendants in nodes_relation_dict.items():
