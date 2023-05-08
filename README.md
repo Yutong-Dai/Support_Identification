@@ -3,7 +3,12 @@ A collection of algorithms for support identification.
 
 # todo
 - [ ] finalize least square datasets
-- [ ] modify the leastsquare loss functions 
+- [x] modify the leastsquare loss functions 
+- [ ] Re-Implement ProxSVRG and ProxSAGA for demostration
+- [x] Tree LS dataste simulation
+- [x] Tree Structure Generation
+- [ ] Interaction Structure Generation
+- [ ] Interaction Dataset Generation
 
 # Setup
 0. (Optional) If you want to change where the datasets are stored, change the following files.
@@ -17,12 +22,12 @@ A collection of algorithms for support identification.
 # Dataset criterion
 features less than 50 or samples less than 10000
 
-blogData n=60,021 p=281
-driftData n=13910 p=128
 log1p.E2006.tfidf n=16,087 p=4,272,227
-UJIdoorLoc n=19,937 p=520
-VirusShare n=107,888 p=482
 YearPredictionMSD n=463,715 p=90
+blogData n=60,021 p=281
+UJIdoorLoc n=19,937 p=520
+driftData n=13910 p=128
+VirusShare n=107,888 p=482
 AmazonAcess n=30,000 p=20,000
 BuzzSocialMedia n=140000, p=77
 FacebookComment n=40949, p = 54
