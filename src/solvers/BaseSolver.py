@@ -38,7 +38,6 @@ class StoBaseSolver:
             self.print_problem()
             self.print_config()        
         # reproted stats
-        self.status = 404
         self.num_epochs = 0
         self.num_data_pass = 0
         self.time_so_far = 0.0
@@ -47,6 +46,10 @@ class StoBaseSolver:
         self.Fend = np.inf
         self.optim = np.inf
         self.xbest = None
+        self.kwargs = {}
+        if self.solve_mode == 'inexact':
+            self.kwargs['total_bak_seq'] = []
+            self.kwargs['inner_its_seq'] = []
 
     def print_problem(self):
         contents = "\n" + "=" * 80
@@ -127,7 +130,7 @@ class StoBaseSolver:
             bacthidx = self.full_idx
         return bacthidx
 
-    def collect_info(self, xk, F_seq, nz_seq, grad_error_seq, x_seq):
+    def collect_info(self, xk, F_seq, nz_seq=None, grad_error_seq=None, x_seq=None, time_seq=None, **kwargs):
         info = {'num_epochs': self.num_epochs, 'num_data_pass': self.num_data_pass, 'time': self.time_so_far, 'optim': self.optim,
                 'Fbest': self.Fbest, 'xbest': csr_matrix(self.xbest),
                 'nnz_best': self.nnz_best, 'nz_best': self.nz_best,
@@ -139,6 +142,10 @@ class StoBaseSolver:
             info['F_seq'] = F_seq
             info['nz_seq'] = nz_seq
             info['grad_error_seq'] = grad_error_seq
+            info['time_seq'] = time_seq
+            if self.solve_mode == "inexact":
+                info['total_bak_seq'] = kwargs['total_bak_seq']
+                info['inner_its_seq'] = kwargs['inner_its_seq']
         if self.config.save_xseq:
             info['x_seq'] = x_seq
         return info

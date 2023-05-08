@@ -28,7 +28,7 @@ def main(config):
     if config.regularizer == 'GL1':
         tag += f"_frac:{config.frac}"
     elif config.regularizer == 'NatOG':
-        tag += f"_NatOG_grpsize:{config.NatOG_grpsize}_NatOG_overlap_ratio:{config.NatOG_overlap_ratio}"
+        tag += f"_NatOG_grpsize:{config.NatOG_grpsize}_NatOG_overlap_ratio:{config.NatOG_overlap_ratio}_ipg_strategy:{config.ipg_strategy}"
     else:
         raise ValueError("Unknown regularizer type.")
 
@@ -184,7 +184,8 @@ def get_config():
     parser.add_argument('--shuffle', default=True, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help='Whether shuffle the dataset after a full pass.')
     parser.add_argument("--batchsize", type=int, default=256, help="Number of samples used to form the stochastic gradient estimate.")
-    parser.add_argument("--save_seq", default=False, type=lambda x: (str(x).lower() in ['true', '1', 'yes']), help="Whether save intermediate results.")
+    parser.add_argument("--save_seq", default=False, type=lambda x: (str(x).lower() in ['true', '1', 'yes']),
+                             help="Whether save intermediate function value, iterate sparsity, and gradient errors.")
     parser.add_argument("--save_xseq", default=True, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help="Whether save intermediate iterates sequence.")
     parser.add_argument('--seed', default=2022, type=int, help='Global random seed.')
@@ -207,10 +208,11 @@ def get_config():
     parser.add_argument("--ipg_linesearch_xi", type=float, default=0.8, help="xi of the linesearch.")
     parser.add_argument("--ipg_linesearch_beta", type=float, default=1.2, help="beta of the linesearch.")
     parser.add_argument("--ipg_linesearch_limits", type=int, default=100, help="max attempts of the linesearch.")
-    parser.add_argument("--ipg_strategy", type=str, default="diminishing", choices=["diminishing"], 
+    parser.add_argument("--ipg_strategy", type=str, default="diminishing", choices=["diminishing","linear_decay"], 
         help="Strategy to inexactly evaluate the proximal operator.\ndiminishing: c * np.log(k+1) / k**delta")    
     parser.add_argument("--ipg_diminishing_c", type=float, default=1, help="c of c * np.log(k+1) / k**delta")
     parser.add_argument("--ipg_diminishing_delta", type=float, default=2, help="delta of c * np.log(k+1) / k**delta")
+    parser.add_argument("--ipg_linear_decay_const", type=float, default=1, help="const of epsilontilde_k = const * epsilontilde_{k-1}. const in (0,1)")
 
     # ProxSVRG
     parser.add_argument('--proxsvrg_inner_repeat', default=1, type=int,

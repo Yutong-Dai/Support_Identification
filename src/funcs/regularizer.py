@@ -290,7 +290,15 @@ class NatOG:
         if not self.config.exact_pg_computation:
             if self.config.ipg_strategy == 'diminishing':
                 k = ipg_kwargs['iteration']
-                self.targap = self.config.ipg_diminishing_c * np.log(k+1) / (k+1)**self.config.ipg_diminishing_delta
+                self.targap = max(self.config.ipg_diminishing_c * np.log(k+1) / (k+1)**self.config.ipg_diminishing_delta, 1e-15)
+            elif self.config.ipg_strategy == 'linear_decay':
+                if self.config.solver in ['ProxSVRG', 'ProxSAGA']:
+                    # the first time we call it is at the zeroth epoch check termination
+                    if ipg_kwargs['iteration'] == 0:
+                        self.targap = alphak / self.config.ipg_linear_decay_const
+                    self.targap *= self.config.ipg_linear_decay_const
+                else:
+                    raise ValueError(f"Incompatiable solver value:{self.config.solver}")
             else:
                 raise ValueError(f"Unrecognized ipg_strategy value:{self.config.ipg_strategy}")
         else:

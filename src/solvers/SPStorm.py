@@ -39,6 +39,7 @@ class SPStorm(StoBaseSolver):
         nz_seq = []
         grad_error_seq = []
         x_seq = []
+        time_seq = []
         self.best_sol_so_far = xk
 
         if self.stepsize_strategy == "const":
@@ -67,6 +68,7 @@ class SPStorm(StoBaseSolver):
                 F_seq.append(self.Fxk)
                 nz_seq.append(self.nz)
                 grad_error_seq.append(self.grad_error)
+                time_seq.append(self.time_so_far)
             if self.config.save_xseq:
                 x_seq.append(csr_matrix(xk))
             if signal == "terminate":
@@ -84,6 +86,9 @@ class SPStorm(StoBaseSolver):
             # new epoch
             self.num_epochs += 1
             batchidx = self.shuffleidx()
+            if self.solve_mode == "inexact":
+                epoch_inner_its = 0
+                epoch_total_bak = 0
             for i in range(self.num_batches):
                 start_idx = i * self.config.batchsize
                 end_idx = min(start_idx + self.config.batchsize, self.n)
@@ -109,16 +114,20 @@ class SPStorm(StoBaseSolver):
                     zk, _, _ = self.r.compute_proximal_gradient_update(xk, self.alphak, dk)
                 elif self.solve_mode == "inexact":
                     zk, ykp1 = self.r.compute_inexact_proximal_gradient_update(
-                        xk, self.alphak, dk, self.yk, self.stepsize_init, ipg_kwargs={'iteration':self.num_epochs, 'xref':self.best_sol_so_far})
+                        xk, self.alphak, dk, self.yk, self.stepsize_init, ipg_kwargs={'iteration':self.iteration + 1, 'xref':self.best_sol_so_far})
                     self.yk = ykp1
                     self.stepsize_init = self.r.stepsize
+                    epoch_inner_its += self.r.inner_its
+                    epoch_total_bak += self.r.total_bak
                     if self.r.flag != 'maxiter':
                         self.best_sol_so_far = zk
                     if self.config.ipg_save_log:
                         if i % 40 == 0:
                             self.r.print_header(filename=self.ipg_log_filename)
                         self.r.print_iteration(epoch = self.num_epochs, batch=i+1, filename=self.ipg_log_filename)
-                            
+                else:
+                    raise ValueError(f"Unknown solve mode:{self.solve_mode}")
+                        
                 if self.config.spstorm_zeta == 'dynanmic' and self.iteration > 0:
                     self.zeta = self.iteration
                 xkp1 = xk + self.zeta * self.betak * (zk - xk)
@@ -126,13 +135,15 @@ class SPStorm(StoBaseSolver):
                 dkm1 = deepcopy(dk)
                 xkm1 = deepcopy(xk)
                 xk = deepcopy(xkp1)
-                
+            if self.solve_mode == "inexact":
+                self.kwargs['total_bak_seq'].append(epoch_total_bak)
+                self.kwargs['inner_its_seq'].append(epoch_inner_its)
 
         # return solutions
         self.xend = xk
         self.Fend = self.Fxk
         self.print_exit()
-        return self.collect_info(xk, F_seq, nz_seq, grad_error_seq, x_seq)
+        return self.collect_info(xk, F_seq, nz_seq, grad_error_seq, x_seq, time_seq, **self.kwargs)
 
     def print_header(self):
         if self.config.compute_optim:

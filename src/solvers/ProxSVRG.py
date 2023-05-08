@@ -33,11 +33,13 @@ class ProxSVRG(StoBaseSolver):
             self.num_batches = self.n // self.config.batchsize + 1
         # collect stats
         start = time.time()
+        self.iteration = 0
 
         F_seq = []
         nz_seq = []
         grad_error_seq = []
         x_seq = []
+        time_seq = []
         vk = 1e17
         self.best_sol_so_far = xk
         while True:
@@ -50,6 +52,7 @@ class ProxSVRG(StoBaseSolver):
                 F_seq.append(self.Fxk)
                 nz_seq.append(self.nz)
                 grad_error_seq.append(self.grad_error)
+                time_seq.append(self.time_so_far)
             if self.config.save_xseq:
                 x_seq.append(csr_matrix(xk))
             if signal == "terminate":
@@ -72,6 +75,9 @@ class ProxSVRG(StoBaseSolver):
             if self.config.proxsvrg_epoch_iterate == 'average':
                 x_running = np.zeros_like(xk)
             # time_one_epoch_start = time.time()
+            if self.solve_mode == "inexact":
+                epoch_inner_its = 0
+                epoch_total_bak = 0
             for m in range(self.config.proxsvrg_inner_repeat):
                 batchidx = self.shuffleidx()
                 for i in range(self.num_batches):
@@ -89,18 +95,21 @@ class ProxSVRG(StoBaseSolver):
                         x_minibatch, _, _ = self.r.compute_proximal_gradient_update(x_minibatch, self.alphak, vk)
                     elif self.solve_mode == "inexact":
                         x_minibatch, ykp1 = self.r.compute_inexact_proximal_gradient_update(
-                                x_minibatch, self.alphak, vk, self.yk, self.stepsize_init, ipg_kwargs={'iteration':self.num_epochs, 'xref':self.best_sol_so_far})
+                                x_minibatch, self.alphak, vk, self.yk, self.stepsize_init, ipg_kwargs={'iteration':self.iteration + 1, 'xref':self.best_sol_so_far})
                         self.yk = ykp1
                         self.stepsize_init = self.r.stepsize
+                        epoch_inner_its += self.r.inner_its
+                        epoch_total_bak += self.r.total_bak                        
                         if self.config.ipg_save_log:
                             if i % 40 == 0:
                                 self.r.print_header(filename=self.ipg_log_filename)
                             self.r.print_iteration(epoch = self.num_epochs, batch=i+1, filename=self.ipg_log_filename)                          
                     else:
                         raise ValueError("Unknown solve mode: {}".format(self.solve_mode))
-
+                    self.iteration += 1
                     if self.config.proxsvrg_epoch_iterate == 'average':
                         x_running += x_minibatch
+                    
                 self.num_data_pass += 1
                 # evaluate the function value after a full pass over the data
                 if self.config.proxsvrg_epoch_iterate == 'average':
@@ -133,11 +142,14 @@ class ProxSVRG(StoBaseSolver):
             # move to the new major iterate
             xk = deepcopy(x_full_pass)
             vk = deepcopy(vk_full_pass)
+            if self.solve_mode == "inexact":
+                self.kwargs['total_bak_seq'].append(epoch_total_bak)
+                self.kwargs['inner_its_seq'].append(epoch_inner_its)            
         # return solutions
         self.xend = xk
         self.Fend = self.Fxk
         self.print_exit()
-        return self.collect_info(xk, F_seq, nz_seq, grad_error_seq, x_seq)
+        return self.collect_info(xk, F_seq, nz_seq, grad_error_seq, x_seq, time_seq, **self.kwargs)
 
     def print_header(self):
         if self.config.compute_optim:
