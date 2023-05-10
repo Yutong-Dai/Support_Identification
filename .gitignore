@@ -52,3 +52,4 @@ ipython_config.py
 
 *.npy
 .vscode/launch.json
+experiments/exp/*

@@ -4,11 +4,13 @@ A collection of algorithms for support identification.
 # todo
 - [ ] finalize least square datasets
 - [x] modify the leastsquare loss functions 
-- [ ] Re-Implement ProxSVRG and ProxSAGA for demostration
+- [x] Re-Implement ProxSVRG and ProxSAGA for demostration
 - [x] Tree LS dataste simulation
 - [x] Tree Structure Generation
 - [ ] Interaction Structure Generation
 - [ ] Interaction Dataset Generation: upto third order 25, 50, 100 `reutrn n + n * (n-1) / 2 + n * (n-1) * (n-2) / 6`
+- [ ] Conduct LS + Btree experiments: 1) finetune lipcoef for each algorithms stepconst for rda
+- [ ] Conduct Logit + Chain experiments: 1) finetune lipcoef for each algorithms stepconst for rda
 
 # Setup
 0. (Optional) If you want to change where the datasets are stored, change the following files.

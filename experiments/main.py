@@ -80,7 +80,10 @@ def main(config):
                 removed_groups = list(set(removed_groups))
                 print("remove num nodes:", len(nodes_idx), "remove num groups:", len(removed_groups))
                 for i in nodes_idx:
-                    weights[i] = config.btree_manual_penalty
+                    if config.btree_manual_penalty != -1.0:
+                        weights[i] = config.btree_manual_penalty
+                    else:
+                        weights[i] = utils.tree_manual_penalty_dict[confi.btree_depth][config.btree_remove]
             group, tree, dot = utils.gen_tree_group(nodes_list, nodes_relation_dict, penalty=config.btree_lammax * config.lam_shrink, weights=weights)
             # if config.btree_manual_weights:
             #     # sqrt(|g|)
@@ -220,7 +223,7 @@ def main(config):
                 tag += f'_rda_stepconst:{config.rda_stepconst}'
                 config.tag = tag
                 solver = RDA(f, r, config)
-                info = solver.solve(x_init=None, alpha_init=alpha_init, stepconst=config.rda_stepconst)
+                info = solver.solve(x_init=None, alpha_init=None, stepconst=config.rda_stepconst)
 
             else:
                 raise ValueError(f"Unrecognized solver:{config.solver}")
@@ -252,7 +255,8 @@ def get_config():
     parser.add_argument("--btree_manual_weights",  type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), default=True, help="manual weights for the binary tree.")
     parser.add_argument("--btree_remove", type=float, default=0.01, help="percent of nodes to remove in binary tree.")  
-    parser.add_argument("--btree_manual_penalty", type=float, default=10.0, help="manual penalty for the binary tree.")                      
+    parser.add_argument("--btree_manual_penalty", type=float, default=-1.0, 
+                    help="manual penalty for the binary tree. Set -1.0 as default so I can use the loop uptable for my test cases.")                      
     parser.add_argument("--btree_lammax", type=float, default=1.0, help="max penalty lambda for the binary tree.")
     parser.add_argument("--weight_decay", type=float, default=1e-4,
                         help="add a quadratic penalty on the loss function to make it stronglt convex; set to 0 to disable.")
@@ -279,7 +283,7 @@ def get_config():
     parser.add_argument('--runs', default=1, type=int, help='(For stochastic algorithms) Total numbers of repeated runs.')
     parser.add_argument("--compute_optim", default=True, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help="Whether compute the optimality measure.")
-    parser.add_argument("--optim_scaled", default=True, type=lambda x: (str(x).lower()
+    parser.add_argument("--optim_scaled", default=False, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help="Whether scale the optimality measure by the stepsize.")
     parser.add_argument("--save_log", default=True, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help="Whether saved detailed outputs to a log file.")

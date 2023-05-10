@@ -14,14 +14,14 @@ else
 fi
 
 # SPSTORM
-# $BASE --solver SPStorm 
+# $BASE --solver SPStorm --spstorm_lipcoef 1.0 &
 
 # PSTORM
 # $BASE --solver PStorm
 
 
 # RDA
-# $BASE --solver RDA --rda_stepconst 0.01
+$BASE --solver RDA --rda_stepconst 0.01 &
 
 # ProxSAGA
 # $BASE --solver ProxSAGA

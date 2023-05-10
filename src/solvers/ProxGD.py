@@ -132,6 +132,10 @@ class ProxGD:
                 
                 self.baks += self.bak
                 xk = xkp1
+                if self.bak > 0:
+                    self.alphak *= self.config.linesearch_xi
+                # if self.bak == 0:
+                #     self.alphak *= self.config.linesearch_beta
             elif self.stepsize_strategy == 'const':
                 xk = self.xprox
             else:

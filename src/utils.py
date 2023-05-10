@@ -295,7 +295,13 @@ fileTypeDict['url_combined'] = 'npy'
 fileTypeDict['avazu-app.tr'] = 'npy'
 fileTypeDict['kdda'] = 'npy'
 
-
+tree_manual_penalty_dict = { 
+                            11: {0.05:2.4, 0.1:2.5, 0.2:2.5}, 
+                            12: {0.05:2.9, 0.1:2.3, 0.2:2.4}, 
+                            13: {0.05:2.9, 0.1:2.5, 0.2:3.0}, 
+                            14: {0.05:2.9, 0.1:2.4, 0.2:2.7},
+                            15: {0.05:3.0, 0.1:2.3, 0.2:2.8}, 
+                            }
 
 # fileTypeDict = {}
 # fileTypeDict['a9a'] = 'txt'
