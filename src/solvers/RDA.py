@@ -42,6 +42,8 @@ class RDA(StoBaseSolver):
         if self.stepsize_strategy == "const":
             self.alphak = alpha_init
         elif self.stepsize_strategy == "increasing":
+            if alpha_init is not None:
+                print("Warning: alpha_init is provided but will not used in increasing stepsize strategy")
             self.alphak = np.sqrt(self.iteration + 1) / stepconst
         else:
             raise ValueError(f"Invalid stepsize_strategy:{self.stepsize_strategy}")

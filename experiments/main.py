@@ -5,8 +5,8 @@ import os
 import sys
 sys.path.append("../")
 import src.utils as utils
-from src.funcs.lossfunction import LogisticLoss
-from src.funcs.regularizer import GL1, NatOG
+from src.funcs.lossfunction import LogisticLoss, LeastSquares
+from src.funcs.regularizer import GL1, NatOG, TreeOG
 from src.solvers.SPStorm import SPStorm
 from src.solvers.PStorm import PStorm
 from src.solvers.ProxSVRG import ProxSVRG
@@ -14,21 +14,35 @@ from src.solvers.ProxSAGA import ProxSAGA
 from src.solvers.RDA import RDA
 from src.solvers.FaRSAGroup.params import params as farsa_config
 from src.solvers.FaRSAGroup.solve import solve as faras_solve
+from src.solvers.ProxGD import ProxGD
 from copy import deepcopy
 from scipy.sparse import csr_matrix
 import time
-
+import random
 
 def main(config):
     # Setup the problem
-    fileType = utils.fileTypeDict[config.dataset]
+    try:
+        fileType = utils.fileTypeDict[config.dataset]
+    except KeyError:
+        fileType = 'npy'
     utils.mkdirs(f'./{config.purpose}/{config.solver}_{config.loss}_{config.regularizer}')
     config.data_dir = os.path.expanduser(config.data_dir)
     tag = f'./{config.purpose}/{config.solver}_{config.loss}_{config.regularizer}/{config.dataset}_lam_shrink:{config.lam_shrink}'
     if config.regularizer == 'GL1':
         tag += f"_frac:{config.frac}"
     elif config.regularizer == 'NatOG':
-        tag += f"_NatOG_grpsize:{config.NatOG_grpsize}_NatOG_overlap_ratio:{config.NatOG_overlap_ratio}_ipg_strategy:{config.ipg_strategy}"
+        if config.overlap_task == 'chain':
+            tag += f"_{config.overlap_task}_{config.chain_grpsize}_{config.chain_overlap_ratio}_{config.ipg_strategy}"
+        elif config.overlap_task == 'btree':
+            tag += f"_{config.overlap_task}_{config.btree_lammax}_{config.btree_depth}_{config.btree_manual_weights}"
+            if config.btree_manual_weights:
+                tag += f"_{config.btree_remove}_{config.btree_manual_penalty}"
+            tag += f"_{config.ipg_strategy}"
+        else:
+            raise ValueError("Unknown overlap task.")
+    elif config.regularizer == 'TreeOG':
+        tag += f"_{config.overlap_task}_{config.btree_lammax}_{config.btree_depth}_{config.btree_manual_weights}_{config.btree_remove}_{config.btree_manual_penalty}"        
     else:
         raise ValueError("Unknown regularizer type.")
 
@@ -37,15 +51,52 @@ def main(config):
     print("Working on: {}...".format(config.dataset))
     X, y = utils.set_up_xy(config.dataset, fileType, dbDir=config.data_dir)
     if config.loss == 'logit':
-        f = LogisticLoss(X, y, config.dataset)
+        f = LogisticLoss(X, y, config.dataset, config.weight_decay)
+    elif config.loss == 'ls':
+        f = LeastSquares(X, y, config.dataset, config.weight_decay)
+    else:
+        raise ValueError("Unknown loss function.")
     
     # Setup the regularizer
     p = X.shape[1]
+    weights = None
     if config.regularizer == 'GL1':
         num_of_groups = max(int(p * config.frac), 1)
         group = utils.gen_group(p, num_of_groups)
-    elif config.regularizer == 'NatOG':
-        group = utils.gen_natovrlp_group(dim=p, grp_size=config.NatOG_grpsize, overlap_ratio=config.NatOG_overlap_ratio)
+    elif config.regularizer in ['NatOG', 'TreeOG']:
+        if config.overlap_task == 'chain':
+            group = utils.gen_chain_group(dim=p, grp_size=config.chain_grpsize, overlap_ratio=config.chain_overlap_ratio)
+        elif config.overlap_task == 'btree':
+            pbak, nodes_list, nodes_relation_dict = utils.construct_complete_tree(config.btree_depth)
+            assert p == pbak
+            if config.btree_manual_weights:
+                weights = np.ones(p)
+                random.seed(config.btree_remove)
+                nodes_idx = random.sample(range(1,p-1), k=int(p * config.btree_remove))
+                dependent_group_lst = [utils.get_dependent_group(idx, nodes_relation_dict) for idx in nodes_idx]
+                removed_groups = []
+                for g in dependent_group_lst:
+                    removed_groups += g
+                removed_groups = list(set(removed_groups))
+                print("remove num nodes:", len(nodes_idx), "remove num groups:", len(removed_groups))
+                for i in nodes_idx:
+                    weights[i] = config.btree_manual_penalty
+            group, tree, dot = utils.gen_tree_group(nodes_list, nodes_relation_dict, penalty=config.btree_lammax * config.lam_shrink, weights=weights)
+            # if config.btree_manual_weights:
+            #     # sqrt(|g|)
+            #     weights = tree['eta_g'] / config.btree_lammax * config.lam_shrink
+            #     random.seed(config.btree_remove)
+            #     nodes_idx = random.sample(range(1,p-1), k=int(p * config.btree_remove))
+            #     dependent_group_lst = [utils.get_dependent_group(idx, nodes_relation_dict) for idx in nodes_idx]
+            #     removed_groups = []
+            #     for g in dependent_group_lst:
+            #         removed_groups += g
+            #     removed_groups = list(set(removed_groups))
+            #     print("remove num nodes:", len(nodes_idx), "remove num groups:", len(removed_groups))
+            #     for i in nodes_idx:
+            #         weights[i] *= config.btree_manual_penalty
+            #     tree['eta_g'] = weights * config.btree_lammax * config.lam_shrink
+
     else:
         raise ValueError("Unknown regularizer type.")
 
@@ -62,25 +113,41 @@ def main(config):
     if config.regularizer == 'GL1':
         lammax_path = f'{config.data_dir}/lammax/lammax-{config.dataset}-{config.frac}.mat'
     elif config.regularizer == 'NatOG':
-        lammax_path = f'{config.data_dir}/lammax/lammax-{config.dataset}-NatOG_grpsize:{config.NatOG_grpsize}_NatOG_overlap_ratio:{config.NatOG_overlap_ratio}.mat'
+        if config.overlap_task == 'chain':
+            lammax_path = f'{config.data_dir}/lammax/lammax-{config.dataset}-chain_grpsize:{config.chain_grpsize}_chain_overlap_ratio:{config.chain_overlap_ratio}.mat'
+        else:
+            lammax_path = None
+    elif config.regularizer == 'TreeOG':
+        lammax_path = None
     else:
         raise ValueError("Unknown regularizer type.")
     
-    if os.path.exists(lammax_path):
-        lammax = loadmat(lammax_path)["lammax"][0][0]
-        print(f"loading lammax from: {lammax_path}")
+    if lammax_path is not None:
+        if os.path.exists(lammax_path):
+            lammax = loadmat(lammax_path)["lammax"][0][0]
+            print(f"loading lammax from: {lammax_path}")
+        else:
+            print(f"Compute lammax ...")
+            lammax = utils.lam_max(X, y, group, config.loss)
+            savemat(lammax_path, {"lammax": lammax})
+            print(f"save lammax to: {lammax_path}")
     else:
-        print(f"Compute lammax ...")
-        lammax = utils.lam_max(X, y, group, config.loss)
-        savemat(lammax_path, {"lammax": lammax})
-        print(f"save lammax to: {lammax_path}")
-    
+        if config.overlap_task == 'btree':
+            lammax = config.btree_lammax
+        else:
+            raise ValueError("Unknown overlap task.")
+        
     Lambda = lammax * config.lam_shrink
     start = time.time()
     if config.regularizer == 'GL1':
         r = GL1(penalty=Lambda, groups=group)
     elif config.regularizer == 'NatOG':
-        r = NatOG(groups=group, penalty=Lambda, config=config)
+        r = NatOG(groups=group, penalty=Lambda, config=config, weights=weights)
+    elif config.regularizer == 'TreeOG':
+        if config.solver == 'ProxGD':
+            r = TreeOG(group, tree, Lambda, weights=weights)
+        else:
+            raise ValueError(f"Solver{config.solver} is not supported.")
     else:
         raise ValueError("Unknown regularizer type.")
 
@@ -99,6 +166,12 @@ def main(config):
         np.save(f"{tag}_stats.npy", stats)
         if info['status'] != 0:
             print(f"Exit without 0 code! Check log files at {tag}!")
+    elif config.solver == 'ProxGD':
+        tag += f'_proxgd_stepsize:{config.proxgd_stepsize}'
+        config.tag = tag
+        solver = ProxGD(f, r, config)
+        info = solver.solve(x_init=None, alpha_init=1.0)
+        np.save(f"{tag}_stats.npy", info)
     else:
         tag_base = deepcopy(tag)
         for run in range(config.runs):
@@ -108,30 +181,37 @@ def main(config):
             tag += f"_seed:{actual_seed}"
 
             utils.setup_seed(actual_seed)
-            alpha_init = 0.1 / L
+            
 
             if config.solver == 'ProxSVRG':
-                tag += f'_proxsvrg_inner_repeat:{config.proxsvrg_inner_repeat}'
+                alpha_init = config.proxsvrg_lipcoef / L
+                tag += f'_proxsvrg_inner_repeat:{config.proxsvrg_inner_repeat}_proxsvrg_lipcoef:{config.proxsvrg_lipcoef}'
                 config.tag = tag
                 solver = ProxSVRG(f, r, config)
                 info = solver.solve(x_init=None, alpha_init=alpha_init)
 
             elif config.solver == 'ProxSAGA':
+                alpha_init = config.proxsaga_lipcoef / L
+                tag += f'_proxsaga_lipcoef:{config.proxsaga_lipcoef}'
                 config.tag = tag
                 solver = ProxSAGA(f, r, config)
                 info = solver.solve(x_init=None, alpha_init=alpha_init)
 
             elif config.solver == 'SPStorm':
+                alpha_init = config.spstorm_lipcoef / L
                 tag += f'_spstorm_stepsize:{config.spstorm_stepsize}'
                 tag += f'_spstorm_betak:{config.spstorm_betak}'
                 tag += f'_spstorm_zeta:{config.spstorm_zeta}'
+                tag += f'_spstorm_lipcoef:{config.spstorm_lipcoef}'
                 config.tag = tag
                 solver = SPStorm(f, r, config)
                 info = solver.solve(x_init=None, alpha_init=alpha_init, Lg=L)
 
             elif config.solver == 'PStorm':
+                alpha_init = config.pstorm_lipcoef / L
                 tag += f'_pstorm_stepsize:{config.pstorm_stepsize}'
                 tag += f'_pstorm_betak:{config.pstorm_betak}'
+                tag += f'_pstorm_lipcoef:{config.pstorm_lipcoef}'
                 config.tag = tag
                 solver = PStorm(f, r, config)
                 info = solver.solve(x_init=None, alpha_init=alpha_init, Lg=L)
@@ -162,16 +242,23 @@ def get_config():
     parser.add_argument("--data_dir", type=str, default="~/db", help="Directory for datasets.")
     parser.add_argument("--dataset", type=str, default="a9a", help='Dataset Name.')
     parser.add_argument("--loss", type=str, default="logit", choices=["logit", "ls"], help='Name of the loss funciton.')
-    parser.add_argument("--regularizer", type=str, default='GL1', choices=["GL1", "NatOG"], help='Name of the loss funciton.')
+    parser.add_argument("--regularizer", type=str, default='GL1', choices=["GL1", "NatOG", "TreeOG"], help='Name of the loss funciton.')
     parser.add_argument("--lam_shrink", type=float, default=0.1, help="The lambda used is calculated as lambda=lambda_max * lam_shrink")
-    parser.add_argument("--frac", type=float, default=0.3, help="num_of_groups = max(int(p * config.frac), 1) for GL1")
-    parser.add_argument("--NatOG_grpsize", type=int, default=10, help="number of variables in each group for NatOG")
-    parser.add_argument("--NatOG_overlap_ratio", type=float, default=0.1, help="overlap ratio between groups for NatOG. Between 0 and 1.")
+    parser.add_argument("--frac", type=float, default=0.3, help="num_of_groups = max(int(p * config.frac), 1)")
+    parser.add_argument("--overlap_task", type=str, default="btree", choices=["btree", "chain", "dgraph"], help="The overlap task for NatOG.")
+    parser.add_argument("--chain_grpsize", type=int, default=10, help="number of variables in each group for NatOG")
+    parser.add_argument("--chain_overlap_ratio", type=float, default=0.1, help="overlap ratio between groups for NatOG. Between 0 and 1.")
+    parser.add_argument("--btree_depth", type=int, default=11, choices=[11,12,13,14,15], help="depth of the binary tree.")
+    parser.add_argument("--btree_manual_weights",  type=lambda x: (str(x).lower()
+                        in ['true', '1', 'yes']), default=True, help="manual weights for the binary tree.")
+    parser.add_argument("--btree_remove", type=float, default=0.01, help="percent of nodes to remove in binary tree.")  
+    parser.add_argument("--btree_manual_penalty", type=float, default=10.0, help="manual penalty for the binary tree.")                      
+    parser.add_argument("--btree_lammax", type=float, default=1.0, help="max penalty lambda for the binary tree.")
     parser.add_argument("--weight_decay", type=float, default=1e-4,
                         help="add a quadratic penalty on the loss function to make it stronglt convex; set to 0 to disable.")
 
     # solver shared arguments
-    parser.add_argument("--solver", type=str, choices=["FaRSAGroup", "SPStorm", "PStorm",
+    parser.add_argument("--solver", type=str, choices=["FaRSAGroup", "ProxGD", "SPStorm", "PStorm",
                                                        "ProxSVRG", "ProxSAGA", "RDA"],
                         help="Solver used.",
                         default="SPStorm")
@@ -220,25 +307,37 @@ def get_config():
     parser.add_argument("--proxsvrg_stepsize", type=str, default='const', choices=['diminishing', 'const'], help="strategy to adjust stepsize.")
     parser.add_argument("--proxsvrg_epoch_iterate", type=str, default='last',
                         choices=['last', 'average'], help="end of the epoch returns the averaged iterate as the major iterate")
+    parser.add_argument("--proxsvrg_lipcoef", type=float, default=0.1, help="lipcoef/L")
 
     # ProxSAGA
     parser.add_argument("--proxsaga_stepsize", type=str, default='const', choices=['diminishing', 'const'], help="strategy to adjust stepsize.")
-
+    parser.add_argument("--proxsaga_lipcoef", type=float, default=0.1, help="lipcoef/L")
     # SPStorm
     parser.add_argument("--spstorm_stepsize", type=str, default='const', choices=['diminishing', 'const'], help="strategy to adjust stepsize.")
     parser.add_argument("--spstorm_betak", type=float, default=-1.0,
                         help="if spstorm_betak is a positive float, then the momentum parameter is set to spstorm_betak; \
                             if spstorm_betak is set to -1.0, then use the diminishing rule to update the momentum paramter.")
     parser.add_argument("--spstorm_zeta", type=float_or_str, default='dynanmic', help="Can be a string or a float")
-
+    parser.add_argument("--spstorm_lipcoef", type=float, default=0.1, help="lipcoef/L")
     # PStorm
     parser.add_argument("--pstorm_stepsize", type=str, default='diminishing', choices=['diminishing', 'const'], help="strategy to adjust stepsize.")
     parser.add_argument("--pstorm_betak", type=float, default=-1.0,
                         help="if pstorm_betak is a positive float, then the momentum parameter is set to pstorm_betak; \
                             if pstorm_betak is set to -1.0, then use the diminishing rule to update the momentum paramter.")
+    parser.add_argument("--pstorm_lipcoef", type=float, default=0.1, help="lipcoef/L")                            
     # RDA
     parser.add_argument("--rda_stepsize", type=str, default='increasing', choices=['increasing', 'const'], help="strategy to adjust stepsize.")
     parser.add_argument("--rda_stepconst", type=float, default=1.0, help="alphak = sqrt(k)/rda_stepconst")
+
+
+    # ProxGD
+    parser.add_argument("--proxgd_method", type=str, default='ISTA', choices=['ISTA', 'FISTA'], help="Proximal gradient method.")
+    parser.add_argument("--proxgd_stepsize", type=str, default='linesearch', choices=['linesearch', 'const'], help="strategy to adjust stepsize.")
+    # global linesearch parameters
+    parser.add_argument("--linesearch_eta", type=float, default=1e-4, help="eta of the linesearch.")
+    parser.add_argument("--linesearch_xi", type=float, default=0.8, help="xi of the linesearch.")
+    parser.add_argument("--linesearch_beta", type=float, default=1.2, help="beta of the linesearch.")
+    parser.add_argument("--linesearch_limits", type=int, default=100, help="max attempts of the linesearch.")
 
     # Parse the arguments
     config = parser.parse_args()

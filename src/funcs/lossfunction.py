@@ -111,7 +111,7 @@ class LeastSquares:
     def func(self, weight):
         return self.evaluate_function_value(weight, idx=None)
 
-    def evaluate_function_value(self, weight, idx=None):
+    def evaluate_function_value(self, weight, bias=0, idx=None):
         self.weight = weight
         if self.weight_decay > 0:
             perturb = 0.5 * self.weight_decay * (weight.T@weight).item()

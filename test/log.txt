@@ -1,0 +1,26 @@
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1      1    desired   5.000e-01     0 +1.835e-02 +1.733e-01 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1      1    desired   1.000e+00     0 +4.044e-02 +1.733e-01 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1      1    desired   1.000e+00     0 +4.044e-02 +1.733e-01 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1      1    desired   5.000e-01     0 +1.835e-02 +1.733e-01 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1      1    desired   5.000e-01     0 +1.835e-02 +1.733e-01 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1      2    desired   1.200e-01     0 +5.914e-02 +1.733e-01 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1     14    desired   1.409e-01     5 +3.094e-04 +4.524e-04 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1      1    desired   1.000e+01     0 +1.975e-04 +4.524e-04 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1      2    desired   1.200e+01     0 +4.396e-11 +1.313e-04 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1     20    desired   1.496e-01     8 +9.073e-05 +1.313e-04 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1     20    desired   1.496e-01     8 +9.073e-05 +1.313e-04 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1      1    desired   1.000e+00     0 +1.142e-01 +1.733e-01 
+ Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
+    1/    1      1    desired   1.000e+00     0 +5.046e-02 +1.733e-01 

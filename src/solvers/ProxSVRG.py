@@ -111,34 +111,33 @@ class ProxSVRG(StoBaseSolver):
                         x_running += x_minibatch
                     
                 self.num_data_pass += 1
-                # evaluate the function value after a full pass over the data
-                if self.config.proxsvrg_epoch_iterate == 'average':
-                    x_full_pass = x_running / ((m + 1) * self.num_batches)
-                else:
-                    x_full_pass = x_minibatch
-                if self.solve_mode == "inexact" and self.r.flag != 'maxiter':
-                    self.best_sol_so_far = x_full_pass
-                F_full_pass = self.f.func(x_full_pass) + self.r.func(x_full_pass)
-                if self.config.save_seq:
-                    F_seq.append(F_full_pass)
-                    _, nz_full_pass = self.r._get_group_structure(x_full_pass)
-                    nz_seq.append(nz_full_pass)
-                if self.config.save_xseq:
-                    x_seq.append(csr_matrix(x_full_pass))
+            # evaluate the function value after proxsvrg_inner_repeat  full pass over the data
+            if self.config.proxsvrg_epoch_iterate == 'average':
+                x_full_pass = x_running / ((m + 1) * self.num_batches)
+            else:
+                x_full_pass = x_minibatch
+            if self.solve_mode == "inexact" and self.r.flag != 'maxiter':
+                self.best_sol_so_far = x_full_pass
+            F_full_pass = self.f.func(x_full_pass) + self.r.func(x_full_pass)
+            if self.config.save_seq:
+                F_seq.append(F_full_pass)
+                _, nz_full_pass = self.r._get_group_structure(x_full_pass)
+                nz_seq.append(nz_full_pass)
+            if self.config.save_xseq:
+                x_seq.append(csr_matrix(x_full_pass))
 
-                    # form the stochastic gradient estimate at the x_full_pass
-                    gradfxk_full_pass = self.f.gradient(x_full_pass, idx=None)
-                    minibatch_idx = batchidx[0:min(self.config.batchsize, self.n)]
-                    _ = self.f.evaluate_function_value(x_full_pass, bias=0, idx=minibatch_idx)
-                    gradf_minibacth = self.f.gradient(x_full_pass, idx=minibatch_idx)
-                    # old grad
-                    _ = self.f.evaluate_function_value(xk, bias=0, idx=minibatch_idx)
-                    gradf_minibacth_old = self.f.gradient(xk, idx=minibatch_idx)
-                    vk_full_pass = gradf_minibacth - gradf_minibacth_old + gradfxk
+                # form the stochastic gradient estimate at the x_full_pass
+                gradfxk_full_pass = self.f.gradient(x_full_pass, idx=None)
+                minibatch_idx = batchidx[0:min(self.config.batchsize, self.n)]
+                _ = self.f.evaluate_function_value(x_full_pass, bias=0, idx=minibatch_idx)
+                gradf_minibacth = self.f.gradient(x_full_pass, idx=minibatch_idx)
+                # old grad
+                _ = self.f.evaluate_function_value(xk, bias=0, idx=minibatch_idx)
+                gradf_minibacth_old = self.f.gradient(xk, idx=minibatch_idx)
+                vk_full_pass = gradf_minibacth - gradf_minibacth_old + gradfxk
 
-                    grad_error_seq.append(utils.l2_norm(vk_full_pass - gradfxk_full_pass))
-            # time_one_epoch= time.time() - time_one_epoch_start
-            # print(f"one epoch:{time_one_epoch:.1f} secs")
+                grad_error_seq.append(utils.l2_norm(vk_full_pass - gradfxk_full_pass))
+
             # move to the new major iterate
             xk = deepcopy(x_full_pass)
             vk = deepcopy(vk_full_pass)

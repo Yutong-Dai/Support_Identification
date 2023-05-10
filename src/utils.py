@@ -76,7 +76,7 @@ def gen_group(p, K):
     group = {'starts': np.array(starts), 'ends': np.array(ends), 'group_frequency': np.array(group_frequency)}
     return group
 
-def gen_natovrlp_group(dim, grp_size, overlap_ratio):
+def gen_chain_group(dim, grp_size, overlap_ratio):
     if grp_size >= dim:
         raise ValueError("grp_size is too large that each group has all variables.")
     overlap = int(grp_size * overlap_ratio)
@@ -104,7 +104,47 @@ def gen_natovrlp_group(dim, grp_size, overlap_ratio):
     group = {'groups':groups, 'starts': np.array(starts), 'ends': np.array(ends), 'group_frequency': np.array(group_frequency)}
     return group
 
-def gen_tree(nodes_list, nodes_relation_dict, penalty=1.0, weights=None, visualize=True):
+def construct_complete_tree(depth):
+    """
+        the root node is of depth 1 and begin with index 0
+    """
+    p = 2 ** depth - 1
+    nodes_list = [[i] for i in range(p)]
+    nodes_relation_dict = {}
+    working_lst = [0]
+    candiate_lst = []
+    for i in range(depth, 1, -1):
+        while len(working_lst) > 0:
+            working_node = working_lst.pop(0)
+            left_child = working_node + 1
+            right_child = left_child + 2**(i-1) - 1
+            nodes_relation_dict[working_node] = [left_child, right_child]
+            candiate_lst.append(left_child)
+            candiate_lst.append(right_child)
+        working_lst = candiate_lst
+        candiate_lst = []
+    num_nodes = len(nodes_list)
+    if len(nodes_relation_dict) < num_nodes:
+        for i in range(num_nodes):
+            if i not in nodes_relation_dict:
+                nodes_relation_dict[i] = []        
+    return p, nodes_list, nodes_relation_dict
+
+def get_dependent_group(node_idx, nodes_relation_dict):
+    """
+        return a list of node_idx that are dependent on the node_idx; including the node_idx itself
+    """
+    dependent_group = []
+    working_lst = [node_idx]
+    while len(working_lst) > 0:
+        working_node = working_lst.pop(0)
+        dependent_group.append(working_node)
+        if len(nodes_relation_dict[working_node]) > 0:
+            for i in nodes_relation_dict[working_node]:
+                working_lst.append(i)
+    return dependent_group      
+
+def gen_tree_group(nodes_list, nodes_relation_dict, penalty=1.0, weights=None, visualize=True):
     """
     nodes_list: list of list, each list is a node
     nodes_relation_dict: dict, key is node name, value is a list of edges

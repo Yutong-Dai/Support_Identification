@@ -2,7 +2,7 @@ import argparse
 import sys
 sys.path.append("../")
 from src.funcs.regularizer import  NatOG
-from src.utils import gen_natovrlp_group
+from src.utils import gen_chain_group
 import numpy as np
 def get_config():
     parser = argparse.ArgumentParser()
@@ -28,7 +28,7 @@ def get_config():
     return config
 
 if __name__ == '__main__':
-    group = gen_natovrlp_group(10, 5, 0.4)
+    group = gen_chain_group(10, 5, 0.4)
     print(group)
     assert group['groups'] == [[0, 1, 2, 3, 4], [3, 4, 5, 6, 7], [6, 7, 8, 9]]
     r = NatOG(groups, penalty=1.0, config=config, weights=np.array([1,100,1]))

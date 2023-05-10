@@ -1,4 +1,0 @@
- Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
-    1/    1      2    desired   1.200e+00     0 +7.394e-03 +1.733e-01 
- Epoch/batch   iters.   Flag    Stepsize   baks    Gap      tarGap
-    1/    1      2    desired   1.200e+00     0 +1.505e-01 +1.733e-01 

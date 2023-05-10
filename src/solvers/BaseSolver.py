@@ -20,6 +20,7 @@ class StoBaseSolver:
         self.config = config
         self.full_idx = np.arange(self.n)
         self.datasetname = self.f.datasetName.split("/")[-1]
+        self.solver = None
         if config.save_log:
             self.filename = '{}.txt'.format(self.config.tag)
         else:

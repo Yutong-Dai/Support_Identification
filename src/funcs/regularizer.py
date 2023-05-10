@@ -469,13 +469,16 @@ class TreeOG:
             tree = {'eta_g': eta_g,'groups' : groups,'own_variables' : own_variables,
                     'N_own_variables' : N_own_variables}
         """
-        assert len(groups) == len(weights), "groups and weights should be of the same length"
         self.penalty = penalty
         self.tree = tree
         self.K = len(groups)
         if weights is None:
             weights = np.array([np.sqrt(len(g)) for g in groups])
+        assert len(groups) == len(weights), "groups and weights should be of the same length"
         self.weights = self.penalty * weights
+        # for i in range(self.K):
+        #     if self.weights[i] != tree['eta_g'][i]:
+        #         print(self.weights[i], tree['eta_g'][i])
         self.groups = List()
         for g in groups:
             self.groups.append(np.array(g))
@@ -503,6 +506,7 @@ class TreeOG:
         """
             implement the fixed stepsize projected  gradient descent
         """
+        # lambda 1 should be alphak instead of the 1/alphak
         param = {'numThreads': -1, 'verbose': False, 'pos': False, 'intercept': False, 'lambda1': alphak, 'regul': 'tree-l2'}
         uk = xk - alphak * dk
         xtrial = spams.proximalTree(uk, self.tree, False, **param)
@@ -511,7 +515,7 @@ class TreeOG:
             nnz, nz = self._get_group_structure(xtrial)
             return xtrial, nnz, nz
         else:
-            return xtrial, _, _
+            return xtrial, None, None
 
 
     def _get_group_structure(self, X):
