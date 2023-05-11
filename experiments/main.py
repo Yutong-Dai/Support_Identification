@@ -46,8 +46,9 @@ def main(config):
     else:
         raise ValueError("Unknown regularizer type.")
 
-    if utils.is_finished(tag + '_stats.npy'):
-        exit()
+    # if utils.is_finished(tag + '_stats.npy'):
+    #     exit()
+
     print("Working on: {}...".format(config.dataset))
     X, y = utils.set_up_xy(config.dataset, fileType, dbDir=config.data_dir)
     if config.loss == 'logit':
@@ -83,7 +84,7 @@ def main(config):
                     if config.btree_manual_penalty != -1.0:
                         weights[i] = config.btree_manual_penalty
                     else:
-                        weights[i] = utils.tree_manual_penalty_dict[confi.btree_depth][config.btree_remove]
+                        weights[i] = utils.tree_manual_penalty_dict[config.btree_depth][config.btree_remove]
             group, tree, dot = utils.gen_tree_group(nodes_list, nodes_relation_dict, penalty=config.btree_lammax * config.lam_shrink, weights=weights)
             # if config.btree_manual_weights:
             #     # sqrt(|g|)
@@ -157,6 +158,8 @@ def main(config):
     print(f"Spend {time.time()-start:.1f} seconds to initialize r.", flush=True)
 
     if config.solver == 'FaRSAGroup':
+        if utils.is_finished(tag + '_stats.npy'):
+            exit()
         farsa_config['tag'] = tag
         farsa_config['save_log'] = True
         info = faras_solve(f, r, X_initial=None, proxStepsize=None, method='gradient',
@@ -171,6 +174,8 @@ def main(config):
             print(f"Exit without 0 code! Check log files at {tag}!")
     elif config.solver == 'ProxGD':
         tag += f'_proxgd_stepsize:{config.proxgd_stepsize}'
+        if utils.is_finished(tag + '_stats.npy'):
+            exit()        
         config.tag = tag
         solver = ProxGD(f, r, config)
         info = solver.solve(x_init=None, alpha_init=1.0)
@@ -189,6 +194,8 @@ def main(config):
             if config.solver == 'ProxSVRG':
                 alpha_init = config.proxsvrg_lipcoef / L
                 tag += f'_proxsvrg_inner_repeat:{config.proxsvrg_inner_repeat}_proxsvrg_lipcoef:{config.proxsvrg_lipcoef}'
+                if utils.is_finished(tag + '_stats.npy'):
+                    exit()                
                 config.tag = tag
                 solver = ProxSVRG(f, r, config)
                 info = solver.solve(x_init=None, alpha_init=alpha_init)
@@ -196,16 +203,19 @@ def main(config):
             elif config.solver == 'ProxSAGA':
                 alpha_init = config.proxsaga_lipcoef / L
                 tag += f'_proxsaga_lipcoef:{config.proxsaga_lipcoef}'
+                if utils.is_finished(tag + '_stats.npy'):
+                    exit()  
                 config.tag = tag
                 solver = ProxSAGA(f, r, config)
                 info = solver.solve(x_init=None, alpha_init=alpha_init)
 
             elif config.solver == 'SPStorm':
                 alpha_init = config.spstorm_lipcoef / L
-                tag += f'_spstorm_stepsize:{config.spstorm_stepsize}'
                 tag += f'_spstorm_betak:{config.spstorm_betak}'
                 tag += f'_spstorm_zeta:{config.spstorm_zeta}'
                 tag += f'_spstorm_lipcoef:{config.spstorm_lipcoef}'
+                if utils.is_finished(tag + '_stats.npy'):
+                    exit() 
                 config.tag = tag
                 solver = SPStorm(f, r, config)
                 info = solver.solve(x_init=None, alpha_init=alpha_init, Lg=L)
@@ -215,12 +225,16 @@ def main(config):
                 tag += f'_pstorm_stepsize:{config.pstorm_stepsize}'
                 tag += f'_pstorm_betak:{config.pstorm_betak}'
                 tag += f'_pstorm_lipcoef:{config.pstorm_lipcoef}'
+                if utils.is_finished(tag + '_stats.npy'):
+                    exit() 
                 config.tag = tag
                 solver = PStorm(f, r, config)
                 info = solver.solve(x_init=None, alpha_init=alpha_init, Lg=L)
 
             elif config.solver == 'RDA':
                 tag += f'_rda_stepconst:{config.rda_stepconst}'
+                if utils.is_finished(tag + '_stats.npy'):
+                    exit() 
                 config.tag = tag
                 solver = RDA(f, r, config)
                 info = solver.solve(x_init=None, alpha_init=None, stepconst=config.rda_stepconst)
@@ -245,6 +259,8 @@ def get_config():
     parser.add_argument("--data_dir", type=str, default="~/db", help="Directory for datasets.")
     parser.add_argument("--dataset", type=str, default="a9a", help='Dataset Name.')
     parser.add_argument("--loss", type=str, default="logit", choices=["logit", "ls"], help='Name of the loss funciton.')
+    parser.add_argument("--weight_decay", type=float, default=1e-5,
+                        help="add a quadratic penalty on the loss function to make it stronglt convex; set to 0 to disable.")
     parser.add_argument("--regularizer", type=str, default='GL1', choices=["GL1", "NatOG", "TreeOG"], help='Name of the loss funciton.')
     parser.add_argument("--lam_shrink", type=float, default=0.1, help="The lambda used is calculated as lambda=lambda_max * lam_shrink")
     parser.add_argument("--frac", type=float, default=0.3, help="num_of_groups = max(int(p * config.frac), 1)")
@@ -258,8 +274,6 @@ def get_config():
     parser.add_argument("--btree_manual_penalty", type=float, default=-1.0, 
                     help="manual penalty for the binary tree. Set -1.0 as default so I can use the loop uptable for my test cases.")                      
     parser.add_argument("--btree_lammax", type=float, default=1.0, help="max penalty lambda for the binary tree.")
-    parser.add_argument("--weight_decay", type=float, default=1e-4,
-                        help="add a quadratic penalty on the loss function to make it stronglt convex; set to 0 to disable.")
 
     # solver shared arguments
     parser.add_argument("--solver", type=str, choices=["FaRSAGroup", "ProxGD", "SPStorm", "PStorm",
@@ -275,11 +289,11 @@ def get_config():
     parser.add_argument('--shuffle', default=True, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help='Whether shuffle the dataset after a full pass.')
     parser.add_argument("--batchsize", type=int, default=256, help="Number of samples used to form the stochastic gradient estimate.")
-    parser.add_argument("--save_seq", default=False, type=lambda x: (str(x).lower() in ['true', '1', 'yes']),
+    parser.add_argument("--save_seq", default=True, type=lambda x: (str(x).lower() in ['true', '1', 'yes']),
                              help="Whether save intermediate function value, iterate sparsity, and gradient errors.")
     parser.add_argument("--save_xseq", default=True, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help="Whether save intermediate iterates sequence.")
-    parser.add_argument('--seed', default=2022, type=int, help='Global random seed.')
+    parser.add_argument('--seed', default=2023, type=int, help='Global random seed.')
     parser.add_argument('--runs', default=1, type=int, help='(For stochastic algorithms) Total numbers of repeated runs.')
     parser.add_argument("--compute_optim", default=True, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help="Whether compute the optimality measure.")
@@ -300,10 +314,10 @@ def get_config():
     parser.add_argument("--ipg_linesearch_beta", type=float, default=1.2, help="beta of the linesearch.")
     parser.add_argument("--ipg_linesearch_limits", type=int, default=100, help="max attempts of the linesearch.")
     parser.add_argument("--ipg_strategy", type=str, default="diminishing", choices=["diminishing","linear_decay"], 
-        help="Strategy to inexactly evaluate the proximal operator.\ndiminishing: c * np.log(k+1) / k**delta")    
+        help="Strategy to inexactly evaluate the proximal operator.\ndiminishing: c * np.log(k+1) / k**delta\nlinear_decay is only for proxsvrg and saga")    
     parser.add_argument("--ipg_diminishing_c", type=float, default=1, help="c of c * np.log(k+1) / k**delta")
     parser.add_argument("--ipg_diminishing_delta", type=float, default=2, help="delta of c * np.log(k+1) / k**delta")
-    parser.add_argument("--ipg_linear_decay_const", type=float, default=1, help="const of epsilontilde_k = const * epsilontilde_{k-1}. const in (0,1)")
+    parser.add_argument("--ipg_linear_decay_const", type=float, default=0.99, help="const of epsilontilde_k = const * epsilontilde_{k-1}. const in (0,1)")
 
     # ProxSVRG
     parser.add_argument('--proxsvrg_inner_repeat', default=1, type=int,

@@ -10,14 +10,14 @@ BASE="python main.py --purpose exp --loss ls --lam_shrink 1e-2 --btree_depth ${d
 
 
 # SPSTORM
-# $BASE --accuracy -1 --regularizer NatOG --max_epochs ${max_epochs} --compute_optim True --solver SPStorm &
+$BASE --accuracy -1 --regularizer NatOG --max_epochs ${max_epochs} --compute_optim True --solver SPStorm --spstorm_lipcoef 1.0 &
 
 # PSTORM
 # $BASE --accuracy -1 --regularizer NatOG --max_epochs ${max_epochs} --compute_optim True  --solver PStorm &
 
 
 # RDA
-$BASE --accuracy -1 --regularizer NatOG --max_epochs ${max_epochs} --compute_optim True --solver RDA --rda_stepconst 1.0
+# $BASE --accuracy -1 --regularizer NatOG --max_epochs ${max_epochs} --compute_optim True --solver RDA --rda_stepconst 1 &
 
 # ProxSAGA
 # $BASE --accuracy -1 --regularizer NatOG --max_epochs ${max_epochs} --compute_optim True --solver ProxSAGA &

@@ -21,7 +21,7 @@ fi
 
 
 # RDA
-$BASE --solver RDA --rda_stepconst 0.01 &
+# $BASE --solver RDA --rda_stepconst 0.01 &
 
 # ProxSAGA
 # $BASE --solver ProxSAGA

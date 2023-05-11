@@ -18,8 +18,9 @@ A collection of algorithms for support identification.
    * Add `--datasetdir` to the commands in the `experiments/setup/process.sh` script. For example, `$PYTHON -m memory_profiler process_data.py --datasetname a9a --datasetdir <your_dir> >> process_log.txt`
    * Change `ROOT` variable in `experiments/setup/compute_Lip.py` to `<your_dir>`.
 
-1. Change the path to the `Python` interpretor of the choice. Specifically, change `PYTHON` variable in the `experiments/setup/process.sh`.
-2. At the root of the project directory, run `cd experiments/setup && bash setup.sh`. A `process_log.txt` file will be created to show the data preprocessing results.
+1. Set the `PROJ_DIR` variable in `experiments/leastsquare_btree/create_bash.py`.
+2. Change the path to the `Python` interpretor of the choice. Specifically, change `PYTHON` variable in the `experiments/setup/process.sh`, `experiments/leastsquare_btree/create_bash.py`.
+3. At the root of the project directory, run `cd experiments/setup && bash setup.sh`. A `process_log.txt` file will be created to show the data preprocessing results.
 
 # Dataset criterion
 features less than 50 or samples less than 10000

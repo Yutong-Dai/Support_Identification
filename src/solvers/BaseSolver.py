@@ -31,6 +31,7 @@ class StoBaseSolver:
             self.yk = None
             self.stepsize_init = None
             self.ipg_log_filename = '{}_ipg.txt'.format(self.config.tag)
+            self.total_correcion = 0
         elif isinstance(r, GL1):
             self.solve_mode = 'exact'
         else:
@@ -51,6 +52,7 @@ class StoBaseSolver:
         if self.solve_mode == 'inexact':
             self.kwargs['total_bak_seq'] = []
             self.kwargs['inner_its_seq'] = []
+        self.status = 404 # not started
 
     def print_problem(self):
         contents = "\n" + "=" * 80
@@ -95,11 +97,13 @@ class StoBaseSolver:
     def print_exit(self):
         contents = '\n' + "=" * 30 + '\n'
         if self.status == 0:
-            contents += 'Exit: Optimal Solution Found\n'
+            contents += 'Exit: Optimal Solution Found with Desried Accuracy\n'
         elif self.status == 1:
-            contents += 'Exit: Iteration limit reached\n'
+            contents += 'Exit: Iteration Limit Reached\n'
         elif self.status == 2:
-            contents += 'Exit: Time limit reached\n'
+            contents += 'Exit: Time Rimit Reached\n'
+        elif self.status == -3:            
+            contents += 'Exit: Error from IPG solver. Probably stepsize is too large leading to divergence. \n'
         else:
             contents += f"Exits: {self.status} Something goes wrong"
         print(contents)
@@ -188,7 +192,6 @@ class StoBaseSolver:
                 raise NotImplementedError("solve_mode must be either 'exact' or 'inexact'")
               
         # time_prox = time.time() - time_prox_start
-
         # print(f"feval:{time_f:.1f} secs | reval:{time_r:.1f} secs | Feval:{time_f+time_r:.1f} secs | gradfeval:{time_grad:.1f} secs | proxeval:{time_prox:.1f} secs | time_check_sparsity: {time_check_sparsity:.1f} secs")
         if self.config.compute_optim: 
             self.optim = utils.l2_norm(xprox - xk)
@@ -200,10 +203,13 @@ class StoBaseSolver:
         if self.optim <= self.config.accuracy:
             self.status = 0
             return 'terminate', gradfxk
-        if self.num_epochs >= self.config.max_epochs:
+        elif self.num_epochs >= self.config.max_epochs:
             self.status = 1
             return 'terminate', gradfxk
-        if self.time_so_far >= self.config.max_time:
+        elif self.time_so_far >= self.config.max_time:
             self.status = 2
             return 'terminate', gradfxk
-        return 'continue', gradfxk
+        elif self.status == -3:
+            return 'terminate', gradfxk
+        else:
+            return 'continue', gradfxk

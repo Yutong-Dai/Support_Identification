@@ -251,7 +251,7 @@ class NatOG:
             self.ends.append(end)
             start = end
         self.starts, self.ends = np.array(self.starts), np.array(self.ends)
-
+        self.targap = None
     def __str__(self):
         return("Overlapping Group L1")
 
@@ -294,9 +294,10 @@ class NatOG:
             elif self.config.ipg_strategy == 'linear_decay':
                 if self.config.solver in ['ProxSVRG', 'ProxSAGA']:
                     # the first time we call it is at the zeroth epoch check termination
-                    if ipg_kwargs['iteration'] == 0:
+                    if self.targap is None:
                         self.targap = alphak / self.config.ipg_linear_decay_const
                     self.targap *= self.config.ipg_linear_decay_const
+                    self.targap = max(1e-15, self.targap)
                 else:
                     raise ValueError(f"Incompatiable solver value:{self.config.solver}")
             else:

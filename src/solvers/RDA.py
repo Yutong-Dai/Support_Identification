@@ -98,6 +98,10 @@ class RDA(StoBaseSolver):
                     epoch_total_bak += self.r.total_bak                    
                     if self.r.flag != 'maxiter':
                         self.best_sol_so_far = xkp1
+                    # sanity check
+                    if self.r.gap < 0:
+                        self.status = -3 # something wrong maye be stepsize too large
+                        break
                     if self.config.ipg_save_log:
                         if i % 40 == 0:
                             self.r.print_header(filename=self.ipg_log_filename)

@@ -53,3 +53,6 @@ ipython_config.py
 *.npy
 .vscode/launch.json
 experiments/exp/*
+experiments/leastsquare_btree/log/*
+experiments/leastsquare_btree/details/*
+experiments/leastsquare_btree/*.sh
