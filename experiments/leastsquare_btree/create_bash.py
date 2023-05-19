@@ -71,6 +71,7 @@ if __name__ == '__main__':
     seed = 2023
     runs = 1 # change to 3 for final run
     purpose = 'leastsquare_btree/details'
+    this_run = None
     # this_run = 'get_ground_truth'
     # this_run = 'parameter_tuning'
     # this_run = 'diminishing_error_for_proxsvrg_and_proxsaga'

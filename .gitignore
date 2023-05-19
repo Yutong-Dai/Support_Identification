@@ -57,3 +57,4 @@ experiments/leastsquare_btree/log/*
 experiments/leastsquare_btree/details/*
 experiments/leastsquare_btree/*.sh
 experiments/test_linear/*
+experiments/logit_chain/*.sh

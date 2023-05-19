@@ -76,7 +76,11 @@ def gen_group(p, K):
     group = {'starts': np.array(starts), 'ends': np.array(ends), 'group_frequency': np.array(group_frequency)}
     return group
 
-def gen_chain_group(dim, grp_size, overlap_ratio):
+def gen_chain_group(dim, grp_size, grp_size_ratio, overlap_ratio):
+    if grp_size is not None and grp_size_ratio is not None:
+        raise ValueError("grp_size and grp_size_ratio cannot be both specified.")
+    if grp_size is None:
+        grp_size = int(dim * grp_size_ratio)
     if grp_size >= dim:
         raise ValueError("grp_size is too large that each group has all variables.")
     overlap = int(grp_size * overlap_ratio)

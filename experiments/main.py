@@ -66,7 +66,7 @@ def main(config):
         group = utils.gen_group(p, num_of_groups)
     elif config.regularizer in ['NatOG', 'TreeOG']:
         if config.overlap_task == 'chain':
-            group = utils.gen_chain_group(dim=p, grp_size=config.chain_grpsize, overlap_ratio=config.chain_overlap_ratio)
+            group = utils.gen_chain_group(dim=p, grp_size=config.chain_grpsize, grp_size_ratio=config.chain_grpsize_ratio, overlap_ratio=config.chain_overlap_ratio)
         elif config.overlap_task == 'btree':
             pbak, nodes_list, nodes_relation_dict = utils.construct_complete_tree(config.btree_depth)
             assert p == pbak
@@ -139,7 +139,7 @@ def main(config):
         if config.overlap_task == 'btree':
             lammax = config.btree_lammax
         else:
-            raise ValueError("Unknown overlap task.")
+            raise ValueError(f"Unknown overlap task:{config.overlap_task}.")
         
     Lambda = lammax * config.lam_shrink
     start = time.time()
@@ -265,7 +265,8 @@ def get_config():
     parser.add_argument("--lam_shrink", type=float, default=0.1, help="The lambda used is calculated as lambda=lambda_max * lam_shrink")
     parser.add_argument("--frac", type=float, default=0.3, help="num_of_groups = max(int(p * config.frac), 1)")
     parser.add_argument("--overlap_task", type=str, default="btree", choices=["btree", "chain", "dgraph"], help="The overlap task for NatOG.")
-    parser.add_argument("--chain_grpsize", type=int, default=10, help="number of variables in each group for NatOG")
+    parser.add_argument("--chain_grpsize", type=int, default=None, help="number of variables in each group for NatOG")
+    parser.add_argument("--chain_grpsize_ratio", type=float, default=0.01, help="number of variables in each group for NatOG defined by ratio")
     parser.add_argument("--chain_overlap_ratio", type=float, default=0.1, help="overlap ratio between groups for NatOG. Between 0 and 1.")
     parser.add_argument("--btree_depth", type=int, default=11, choices=[11,12,13,14,15], help="depth of the binary tree.")
     parser.add_argument("--btree_manual_weights",  type=lambda x: (str(x).lower()
