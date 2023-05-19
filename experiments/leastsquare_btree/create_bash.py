@@ -73,8 +73,9 @@ if __name__ == '__main__':
     purpose = 'leastsquare_btree/details'
     # this_run = 'get_ground_truth'
     # this_run = 'parameter_tuning'
-    this_run = 'diminishing_error_for_proxsvrg_and_proxsaga'
+    # this_run = 'diminishing_error_for_proxsvrg_and_proxsaga'
     # this_run = 'final_run'
+    # this_run = 'final_run_rda'
 
     task_hypers_template = {
             'ProxGD': {'proxgd_method': 'ISTA', 'proxgd_stepsize': 'linesearch'},
@@ -139,6 +140,55 @@ if __name__ == '__main__':
                         depth_lst, remove_ratio_lst,
                         accuracy, max_time, max_epochs, max_iters,
                         seed, runs, solver, **hypers)
+    elif this_run == 'final_run':
+        depth_lst = [14, 15]
+        remove_ratio_lst = [0.05, 0.10, 0.20]
+        max_iters = 1
+        max_epochs = 500
+        accuracy = -1.0  # disable chi termination options
+        for solver in ['ProxSVRG', 'ProxSAGA', 'PStorm', 'SPStorm']:
+            for const in [1.0]:
+                hypers = deepcopy(task_hypers_template[solver])
+                if solver == 'RDA':
+                    hypers['rda_stepconst'] = const
+                    hypers['ext'] = f'stepconst:{const}'
+                else:
+                    solver_lower_case = solver.lower()
+                    hypers[f'{solver_lower_case}_lipcoef'] = const
+                    hypers['ext'] = f'lipcoef:{const}'
+
+                if solver in ['ProxSVRG', 'ProxSAGA']:
+                    hypers[f'ipg_strategy'] = 'diminishing'
+                    del hypers['ipg_linear_decay_const']
+                create(scriptdir, data_dir,
+                        purpose, loss, weight_decay,
+                        depth_lst, remove_ratio_lst,
+                        accuracy, max_time, max_epochs, max_iters,
+                        seed, runs, solver, **hypers)
+    elif this_run == 'final_run_rda':
+        # tunig stepconst
+        depth_lst = [14, 15]
+        remove_ratio_lst = [0.05, 0.10, 0.20]
+        max_iters = 1
+        max_epochs = 500
+        accuracy = -1.0  # disable chi termination options
+        for solver in ['RDA']:
+            for const in [1.0, 10.0]:
+                hypers = deepcopy(task_hypers_template[solver])
+                if solver == 'RDA':
+                    hypers['rda_stepconst'] = const
+                    hypers['ext'] = f'stepconst:{const}'
+                else:
+                    solver_lower_case = solver.lower()
+                    hypers[f'{solver_lower_case}_lipcoef'] = const
+                    hypers['ext'] = f'lipcoef:{const}'
+                create(scriptdir, data_dir,
+                        purpose, loss, weight_decay,
+                        depth_lst, remove_ratio_lst,
+                        accuracy, max_time, max_epochs, max_iters,
+                        seed, runs, solver, **hypers)             
+    else:
+        print("No bash is creared.")           
 
 
     

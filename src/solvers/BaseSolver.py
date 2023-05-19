@@ -101,7 +101,7 @@ class StoBaseSolver:
         elif self.status == 1:
             contents += 'Exit: Iteration Limit Reached\n'
         elif self.status == 2:
-            contents += 'Exit: Time Rimit Reached\n'
+            contents += 'Exit: Time Limit Reached\n'
         elif self.status == -3:            
             contents += 'Exit: Error from IPG solver. Probably stepsize is too large leading to divergence. \n'
         else:
