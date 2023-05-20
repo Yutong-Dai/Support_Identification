@@ -115,10 +115,10 @@ def main(config):
         print(f"save Lipschitz constant to: {Lip_path}")
 
     if config.regularizer == 'GL1':
-        lammax_path = f'{config.data_dir}/lammax/lammax-{config.dataset}-{config.frac}.mat'
+        lammax_path = f'{config.data_dir}/lammax/{config.loss}-lammax-{config.dataset}-{config.frac}.mat'
     elif config.regularizer == 'NatOG':
         if config.overlap_task == 'chain':
-            lammax_path = f'{config.data_dir}/lammax/lammax-{config.dataset}-chain_grpsize:{config.chain_grpsize}_chain_overlap_ratio:{config.chain_overlap_ratio}.mat'
+            lammax_path = f'{config.data_dir}/lammax/{config.loss}-lammax-{config.dataset}-chain_grpsize:{config.chain_grpsize}_chain_overlap_ratio:{config.chain_overlap_ratio}.mat'
         else:
             lammax_path = None
     elif config.regularizer == 'TreeOG':
@@ -266,7 +266,7 @@ def get_config():
     parser.add_argument("--frac", type=float, default=0.3, help="num_of_groups = max(int(p * config.frac), 1)")
     parser.add_argument("--overlap_task", type=str, default="btree", choices=["btree", "chain", "dgraph"], help="The overlap task for NatOG.")
     parser.add_argument("--chain_grpsize", type=int, default=None, help="number of variables in each group for NatOG")
-    parser.add_argument("--chain_grpsize_ratio", type=float, default=0.01, help="number of variables in each group for NatOG defined by ratio")
+    parser.add_argument("--chain_grpsize_ratio", type=float, default=None, help="number of variables in each group for NatOG defined by ratio")
     parser.add_argument("--chain_overlap_ratio", type=float, default=0.1, help="overlap ratio between groups for NatOG. Between 0 and 1.")
     parser.add_argument("--btree_depth", type=int, default=11, choices=[11,12,13,14,15], help="depth of the binary tree.")
     parser.add_argument("--btree_manual_weights",  type=lambda x: (str(x).lower()

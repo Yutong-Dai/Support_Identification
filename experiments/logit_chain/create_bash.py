@@ -10,7 +10,7 @@ from copy import deepcopy
 
 def create(scriptdir, data_dir, datasets,
            purpose, loss, weight_decay, 
-           chain_grpsize_ratio, chain_overlap_ratio, lam_shrink,
+           chain_grpsize, chain_overlap_ratio, lam_shrink,
            accuracy, max_time, max_epochs,
            seed, runs,
            solver, **kwargs):        
@@ -27,7 +27,7 @@ def create(scriptdir, data_dir, datasets,
     # create command lines
     command = f'{PYTHON} main.py --solver {solver} --purpose {purpose} --loss {loss} --weight_decay {weight_decay} --regularizer NatOG'    
     # Problem configurations
-    command += f' --overlap_task chain --chain_grpsize_ratio {chain_grpsize_ratio} --chain_overlap_ratio {chain_overlap_ratio} --lam_shrink {lam_shrink}'
+    command += f' --overlap_task chain --chain_grpsize {chain_grpsize} --chain_overlap_ratio {chain_overlap_ratio} --lam_shrink {lam_shrink}'
     # termination configurations
     command += f' --accuracy {accuracy} --max_time {max_time} --max_epochs {max_epochs}'
     # shared solver configurations
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     logdir = "./log"
     if not os.path.exists(logdir):
         os.mkdir(logdir)
-    loss = 'ls'
+    loss = 'logit'
     weight_decay = 1e-5
     ########################## config here ####################
     max_time = 43200.0  # 12h
@@ -64,10 +64,9 @@ if __name__ == '__main__':
     runs = 1 # change to 3 for final run
     purpose = 'logit_chain/details'
     this_run = None
-    this_run = 'parameter_tuning'
+    # this_run = 'parameter_tuning'
     # this_run = 'parameter_tuning_rda'
-    # this_run = 'final_run'
-    # this_run = 'final_run_rda'
+    this_run = 'final_run'
     
     task_hypers_template = {
             'ProxSVRG': {'proxsvrg_inner_repeat': 1, 'proxsvrg_lipcoef': 1.0, 'ipg_strategy': 'diminishing'},
@@ -80,29 +79,68 @@ if __name__ == '__main__':
 
     if this_run == 'parameter_tuning':
         datasets = ["a9a", "w8a"]
-        solver = 'ProxGD'
         accuracy = -1.0  # disable chi termination options 
         max_epochs = 500
-        for solver in ['ProxSVRG', 'ProxSAGA', 'PStorm', 'SPStorm']:
+        # for solver in ['ProxSVRG']:
+        for solver in ['ProxSAGA', 'PStorm', 'SPStorm']:
             for lam_shrink in [0.1, 0.01]:
-                for chain_grpsize_ratio in [0.01, 0.1]:
+                for chain_grpsize in [10, 100]:
                     for chain_overlap_ratio in [0.1, 0.2, 0.3]:
                         for const in [0.1, 0.5, 1.0]:
                             hypers = deepcopy(task_hypers_template[solver])
                             solver_lower_case = solver.lower()
                             hypers[f'{solver_lower_case}_lipcoef'] = const
-                            hypers['ext'] = f'lipcoef:{const}_chain_grpsize_ratio:{chain_grpsize_ratio}_chain_overlap_ratio:{chain_overlap_ratio}_lam_shrink:{lam_shrink}'
+                            hypers['ext'] = f'lipcoef:{const}_chain_grpsize:{chain_grpsize}_chain_overlap_ratio:{chain_overlap_ratio}_lam_shrink:{lam_shrink}'
                             create(scriptdir, data_dir, datasets,
                                 purpose, loss, weight_decay, 
-                                chain_grpsize_ratio, chain_overlap_ratio, lam_shrink,
+                                chain_grpsize, chain_overlap_ratio, lam_shrink,
                                 accuracy, max_time, max_epochs,
                                 seed, runs,
                                 solver, **hypers)
+    elif this_run == 'parameter_tuning_rda':
+        datasets = ["a9a", "w8a"]
+        accuracy = -1.0  # disable chi termination options 
+        max_epochs = 500
+        for solver in ['RDA']:
+            for lam_shrink in [0.1, 0.01]:
+                for chain_grpsize in [10, 100]:
+                    for chain_overlap_ratio in [0.1, 0.2, 0.3]:
+                        for const in [0.001, 0.01, 0.1, 1.0, 10.0]:
+                            hypers = deepcopy(task_hypers_template[solver])
+                            solver_lower_case = solver.lower()
+                            hypers['rda_stepconst'] = const
+                            hypers['ext'] = f'lipcoef:{const}chain_grpsize:{chain_grpsize}_chain_overlap_ratio:{chain_overlap_ratio}_lam_shrink:{lam_shrink}'
+                            create(scriptdir, data_dir, datasets,
+                                purpose, loss, weight_decay, 
+                                chain_grpsize, chain_overlap_ratio, lam_shrink,
+                                accuracy, max_time, max_epochs,
+                                seed, runs,
+                                solver, **hypers)                                
 
     elif this_run == 'final_run':
-        datasets = ["a9a", 'covtype', "phishing", 'rcv1', 'real-sim', "w8a"]
+        datasets = ['rcv1', 'real-sim', 'avazu-app.tr', 'news20']
         max_epochs = 500
         accuracy = -1.0  # disable chi termination options
+        task_hypers_template = {
+            'ProxSVRG': {'proxsvrg_inner_repeat': 1, 'proxsvrg_lipcoef': 1.0, 'ipg_strategy': 'diminishing'},
+            'ProxSAGA': {'proxsaga_lipcoef': 1.0, 'ipg_strategy': 'diminishing'},
+            'SPStorm': {'spstorm_betak': -1.0, 'spstorm_zeta': 'dynanmic', 'spstorm_lipcoef': 1.0, 'ipg_strategy': 'diminishing'},
+            'PStorm': {'pstorm_stepsize': 'diminishing', 'pstorm_betak': -1.0, 'pstorm_lipcoef': 1.0, 'ipg_strategy': 'diminishing'},
+            'RDA': {'rda_stepconst': 0.01, 'ipg_strategy': 'diminishing'}
+        }
+        for solver in ['ProxSVRG']:
+        # for solver in ['ProxSAGA', 'PStorm', 'SPStorm']:
+            for lam_shrink in [0.1, 0.01]:
+                for chain_grpsize in [10, 100]:
+                    for chain_overlap_ratio in [0.1, 0.2, 0.3]:
+                            hypers = task_hypers_template[solver]
+                            hypers['ext'] = f'chain_grpsize:{chain_grpsize}_chain_overlap_ratio:{chain_overlap_ratio}_lam_shrink:{lam_shrink}'
+                            create(scriptdir, data_dir, datasets,
+                                purpose, loss, weight_decay, 
+                                chain_grpsize, chain_overlap_ratio, lam_shrink,
+                                accuracy, max_time, max_epochs,
+                                seed, runs,
+                                solver, **hypers)
     else:
         print("No bash is creared.")           
 

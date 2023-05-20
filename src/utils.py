@@ -86,9 +86,7 @@ def gen_chain_group(dim, grp_size, grp_size_ratio, overlap_ratio):
     overlap = int(grp_size * overlap_ratio)
     if overlap < 1:
         msg = "current config of grp_size and overlap_ratio cannot produce overlapping groups.\n"
-        msg += "overlap_ratio is adjusted to have at least one overlap."
-        warnings.warn(msg)
-        overlap = 1
+        raise ValueError(msg)
     groups = []
     starts = []
     ends = []
