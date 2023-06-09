@@ -118,7 +118,7 @@ if __name__ == '__main__':
                                 solver, **hypers)                                
 
     elif this_run == 'final_run':
-        datasets = ['rcv1', 'real-sim', 'avazu-app.tr', 'news20']
+        datasets = ['rcv1', 'real-sim', 'news20']
         max_epochs = 500
         accuracy = -1.0  # disable chi termination options
         task_hypers_template = {
@@ -128,8 +128,8 @@ if __name__ == '__main__':
             'PStorm': {'pstorm_stepsize': 'diminishing', 'pstorm_betak': -1.0, 'pstorm_lipcoef': 1.0, 'ipg_strategy': 'diminishing'},
             'RDA': {'rda_stepconst': 0.01, 'ipg_strategy': 'diminishing'}
         }
-        for solver in ['ProxSVRG']:
-        # for solver in ['ProxSAGA', 'PStorm', 'SPStorm']:
+        for solver in ['RDA']:
+        # for solver in ['ProxSVRG', 'ProxSAGA', 'PStorm', 'SPStorm']:
             for lam_shrink in [0.1, 0.01]:
                 for chain_grpsize in [10, 100]:
                     for chain_overlap_ratio in [0.1, 0.2, 0.3]:
