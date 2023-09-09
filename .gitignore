@@ -60,3 +60,6 @@ experiments/test_linear/*
 experiments/logit_chain/*.sh
 experiments/logit_chain/log/*
 experiments/logit_chain/details/*
+.history/*
+experiments/OMS_rebuttal/log/*
+experiments/OMS_rebuttal/*.sh

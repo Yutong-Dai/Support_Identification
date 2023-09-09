@@ -1,0 +1,9 @@
+solver="${1:-sh}" 
+files=`ls ./*.sh | grep $solver`
+total_jobs=`ls ./*.sh | grep $solver | wc -l`
+for file in $files
+do
+  echo "submit $file ..."
+  bash $file
+done
+echo "submit $total_jobs jobs"

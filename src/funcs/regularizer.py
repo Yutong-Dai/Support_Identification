@@ -154,6 +154,19 @@ class GL1:
     ##############################################
     #      exact proximal gradient calculation   #
     ##############################################
+
+    def compute_exact_proximal_gradient_update(self, xk, alphak, dk, compute_structure):
+        xtrial = self._compute_proximal_gradient_update_jit(xk, alphak, dk, self.starts,
+                                                          self.ends, self.weights)
+        self.optim = l2_norm(xtrial - xk)
+        if compute_structure:
+            nnz, nz = self._get_group_structure(xtrial)
+            return xtrial, nnz, nz
+        else:
+            return xtrial, None, None
+
+
+
     def compute_proximal_gradient_update(self, xk, alphak, dk):
         return self._compute_proximal_gradient_update_jit(xk, alphak, dk, self.starts,
                                                           self.ends, self.weights)
@@ -300,6 +313,13 @@ class NatOG:
                     self.targap = max(1e-15, self.targap)
                 else:
                     raise ValueError(f"Incompatiable solver value:{self.config.solver}")
+            elif self.config.ipg_strategy == 'schimdt':
+                k = ipg_kwargs['iteration'] 
+                self.targap = max(self.config.ipg_schimdt_c  / (k+1)**self.config.ipg_schimdt_delta, 1e-15)
+            elif self.config.ipg_strategy == 'yd':
+                ckplu1 = (np.sqrt(6 / (1 + self.config.ipg_yd_gamma * alphak)) - np.sqrt(2 / alphak)) ** 2 / 4
+            elif self.config.ipg_strategy == 'lee':
+                primal_val_xk = self.prox_primal(xk, uk, alphak, self.func(xk))
             else:
                 raise ValueError(f"Unrecognized ipg_strategy value:{self.config.ipg_strategy}")
         else:
@@ -344,6 +364,11 @@ class NatOG:
             rxtrial_proj = self.func(xtrial_proj)
             primal_val_proj = self.prox_primal(xtrial_proj, uk, alphak, rxtrial_proj)
             gap = (primal_val_proj - dual_val)
+            if not self.config.exact_pg_computation:
+                if self.config.ipg_strategy == 'yd':
+                    self.targap = ckplu1 * l2_norm(xtrial_proj - xk) ** 2
+                elif self.config.ipg_strategy == 'lee':
+                    self.targap = self.config.ipg_lee_gamma * (primal_val_xk - dual_val)            
             if gap < self.targap:
                 xtrial = xtrial_proj
                 self.flag = 'desired'
@@ -353,6 +378,9 @@ class NatOG:
             rxtrial = self.func(xtrial)
             primal_val = self.prox_primal(xtrial, uk, alphak, rxtrial)
             gap = (primal_val - dual_val)
+            if not self.config.exact_pg_computation:
+                if self.config.ipg_strategy == 'yd':
+                    self.targap = ckplu1 * l2_norm(xtrial - xk) ** 2
             if gap < self.targap:
                 self.flag = 'desired'
                 self.rxtrial = rxtrial
@@ -380,7 +408,10 @@ class NatOG:
                 self.stepsize *= self.config.ipg_linesearch_beta
         # post-processing
         self.gap = gap
-        self.aoptim = l2_norm(xtrial - xk)
+        if (not self.config.exact_pg_computation) and (self.config.ipg_strategy == 'yd') and self.flag != 'maxiter':
+            self.aoptim = np.sqrt(self.targap / ckplu1)
+        else:
+            self.aoptim = l2_norm(xtrial - xk)
         self.xtrial = xtrial
         return xtrial, ytrial
     def _proj_norm_ball(self, y):

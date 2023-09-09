@@ -305,6 +305,22 @@ tree_manual_penalty_dict = {
                             15: {0.05:3.0, 0.1:2.3, 0.2:2.8}, 
                             }
 
+import cvxpy as cp
+def update_nu_rho(xk, alphak, dk, yk, r, nuk, rhok):
+    uk = xk - alphak * dk
+    y = cp.Variable(yk.shape)
+    Ay = r.A @ y
+    obj = alphak/2 * cp.sum_squares(Ay) + uk.T@Ay
+    constraints =  [cp.norm2(y[start:end]) <= radius for start, end, radius in zip(r.starts, r.ends, r.weights)]
+    prob = cp.Problem(cp.Minimize(obj), constraints)
+    prob.solve(solver=cp.GUROBI, verbose=False, max_iters=1000)
+    temp = 2 * r.targap / alphak
+    dist_to_sol_set_up = np.linalg.norm(yk - y.value)
+    while dist_to_sol_set_up > nuk * (temp ** (rhok/2)):
+        nuk *= 2
+        if temp < 1.0:
+            rhok /= 2
+    return nuk, rhok, dist_to_sol_set_up
 # fileTypeDict = {}
 # fileTypeDict['a9a'] = 'txt'
 # fileTypeDict['australian'] = 'txt'

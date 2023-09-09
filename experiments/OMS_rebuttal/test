@@ -1,0 +1,18 @@
+cd /home/yutong/Support_Identification/experiments
+
+
+# /home/yutong/anaconda3/bin/python main.py \
+#         --purpose OMS_rebuttal --loss logit --weight_decay 1e-05 --regularizer NatOG --overlap_task chain --chain_grpsize 10 --chain_overlap_ratio 0.1 \
+#         --lam_shrink 0.01 --accuracy 1e-4 --max_time 43200.0 --max_iters 100000 \
+#         --compute_optim True --data_dir ~/db --dataset w8a \
+#         --solver InexactProxGD --ipg_strategy yd --prox_step_strategy heuristic \
+#         --rebuttal True
+
+/home/yutong/anaconda3/bin/python main.py \
+        --purpose OMS_rebuttal --loss logit --weight_decay 1e-05 --regularizer NatOG --overlap_task chain --chain_grpsize 10 --chain_overlap_ratio 0.1 \
+        --lam_shrink 0.01 --accuracy 1e-4 --max_time 10.0 --max_iters 100 \
+        --compute_optim True --data_dir ~/db --dataset mushrooms \
+        --solver InexactProxGD --ipg_strategy yd --prox_step_strategy heuristic \
+        --rebuttal True
+
+        

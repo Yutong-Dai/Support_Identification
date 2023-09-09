@@ -10,6 +10,7 @@ import os
 
 @profile
 def load(filepath, to_dense=False):
+    print(filepath)
     data = load_svmlight_file(filepath)
     X, y = data[0], data[1].reshape(-1, 1)
     if to_dense:
@@ -48,9 +49,9 @@ def main():
         exit()
     print(f'loading_{config.datasetname}', flush=True)
     if config.ext is not None:
-        filename = f"{config.datasetname}.{config.ext}"
+        filename = f"{config.datasetdir}/{config.datasetname}.{config.ext}"
     else:
-        filename = f"{config.datasetname}"
+        filename = f"{config.datasetdir}/{config.datasetname}"
     start = time.time()
     X, y = load(filename)
     time_elapsed = time.time() - start

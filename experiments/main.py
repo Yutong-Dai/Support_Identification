@@ -15,6 +15,7 @@ from src.solvers.RDA import RDA
 from src.solvers.FaRSAGroup.params import params as farsa_config
 from src.solvers.FaRSAGroup.solve import solve as faras_solve
 from src.solvers.ProxGD import ProxGD
+from src.solvers.InexactProxGD import InexactProxGD
 from copy import deepcopy
 from scipy.sparse import csr_matrix
 import time
@@ -180,6 +181,13 @@ def main(config):
         solver = ProxGD(f, r, config)
         info = solver.solve(x_init=None, alpha_init=1.0)
         np.save(f"{tag}_stats.npy", info)
+    elif config.solver == 'InexactProxGD':
+        tag += f'_prox_step_strategy:{config.prox_step_strategy}'
+        config.tag = tag
+        solver = InexactProxGD(f, r, config)
+        info = solver.solve(x_init=None, alpha_init=1.0)
+        np.save(f"{tag}_stats.npy", info)
+
     else:
         tag_base = deepcopy(tag)
         for run in range(config.runs):
@@ -277,7 +285,8 @@ def get_config():
     parser.add_argument("--btree_lammax", type=float, default=1.0, help="max penalty lambda for the binary tree.")
 
     # solver shared arguments
-    parser.add_argument("--solver", type=str, choices=["FaRSAGroup", "ProxGD", "SPStorm", "PStorm",
+    parser.add_argument("--solver", type=str, choices=["FaRSAGroup", "ProxGD", "InexactProxGD",
+                                                        "SPStorm", "PStorm",
                                                        "ProxSVRG", "ProxSAGA", "RDA"],
                         help="Solver used.",
                         default="SPStorm")
@@ -301,7 +310,7 @@ def get_config():
     parser.add_argument("--optim_scaled", default=False, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help="Whether scale the optimality measure by the stepsize.")
     parser.add_argument("--save_log", default=True, type=lambda x: (str(x).lower()
-                        in ['true', '1', 'yes']), help="Whether saved detailed outputs to a log file.")
+                        in ['true', '1', 'yes']), help="Whether saved detailed outputs to a log file.")    
     # IPG solver configurations
     parser.add_argument("--ipg_save_log", default=True, type=lambda x: (str(x).lower()
                         in ['true', '1', 'yes']), help="whether save the log of the ipg solver.")
@@ -314,10 +323,14 @@ def get_config():
     parser.add_argument("--ipg_linesearch_xi", type=float, default=0.8, help="xi of the linesearch.")
     parser.add_argument("--ipg_linesearch_beta", type=float, default=1.2, help="beta of the linesearch.")
     parser.add_argument("--ipg_linesearch_limits", type=int, default=100, help="max attempts of the linesearch.")
-    parser.add_argument("--ipg_strategy", type=str, default="diminishing", choices=["diminishing","linear_decay"], 
+    parser.add_argument("--ipg_strategy", type=str, default="diminishing", choices=["diminishing","linear_decay", "lee", "yd", "schimdt"], 
         help="Strategy to inexactly evaluate the proximal operator.\ndiminishing: c * np.log(k+1) / k**delta\nlinear_decay is only for proxsvrg and saga")    
     parser.add_argument("--ipg_diminishing_c", type=float, default=1, help="c of c * np.log(k+1) / k**delta")
     parser.add_argument("--ipg_diminishing_delta", type=float, default=2, help="delta of c * np.log(k+1) / k**delta")
+    parser.add_argument("--ipg_schimdt_c", type=float, default=1000, help="c of c / k**delta")
+    parser.add_argument("--ipg_schimdt_delta", type=float, default=3, help="delta of c / k**delta")
+    parser.add_argument("--ipg_yd_gamma", type=float, default=0.2, help="yd gamma")
+    parser.add_argument("--ipg_lee_gamma", type=float, default=0.5, help="lee gamma")
     parser.add_argument("--ipg_linear_decay_const", type=float, default=0.99, help="const of epsilontilde_k = const * epsilontilde_{k-1}. const in (0,1)")
 
     # ProxSVRG
@@ -352,11 +365,20 @@ def get_config():
     # ProxGD
     parser.add_argument("--proxgd_method", type=str, default='ISTA', choices=['ISTA', 'FISTA'], help="Proximal gradient method.")
     parser.add_argument("--proxgd_stepsize", type=str, default='linesearch', choices=['linesearch', 'const'], help="strategy to adjust stepsize.")
+
+    # InexactProxGD
+    parser.add_argument("--do_linesearch", default=True, type=lambda x: (str(x).lower()
+                        in ['true', '1', 'yes']), help="Whether do line search or not.")
+    parser.add_argument("--prox_step_strategy", type=str, default="heuristic", choices=["frac","model", "heuristic", "const"], help="Strategy to update alpha")                    
+
     # global linesearch parameters
     parser.add_argument("--linesearch_eta", type=float, default=1e-4, help="eta of the linesearch.")
     parser.add_argument("--linesearch_xi", type=float, default=0.8, help="xi of the linesearch.")
     parser.add_argument("--linesearch_beta", type=float, default=1.2, help="beta of the linesearch.")
     parser.add_argument("--linesearch_limits", type=int, default=100, help="max attempts of the linesearch.")
+
+    parser.add_argument('--rebuttal', default=False, type=lambda x: (str(x).lower()
+                        in ['true', '1', 'yes']), help='rebuttal mode.')
 
     # Parse the arguments
     config = parser.parse_args()
